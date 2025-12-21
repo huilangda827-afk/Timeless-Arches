@@ -183,3 +183,5 @@ rimLight.intensity = 1.0; // 调整边缘光强度
    - 背光面不应该完全死黑（有 Fill Light）
    - 模型边缘应该有轮廓光（Rim Light）
 
+
+

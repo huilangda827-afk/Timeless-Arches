@@ -157,7 +157,7 @@
         // 全局变量
         let hands = null;
         let camera = null;
-        let lastFrameTime = 0;
+        let lastFrameTime = performance.now(); // 初始化为当前时间，避免FPS计算异常
         let frameCount = 0;
         let currentFPS = 0;
 
@@ -175,6 +175,7 @@
 
         // 初始化MediaPipe Hands
         function initializeHands() {
+            if (hands) return;
             hands = new Hands({
                 locateFile: (file) => {
                     return `https://cdn.jsdelivr.net/npm/@mediapipe/hands/${file}`;
@@ -189,13 +190,15 @@
             });
 
             hands.onResults(onResults);
+            console.log('[MediaPipe] Hands 已初始化');
         }
 
         // 处理识别结果
         function onResults(results) {
             // 计算帧率
             calculateFPS();
-if (results.multiHandLandmarks && results.multiHandLandmarks.length > 0) {
+
+            if (results.multiHandLandmarks && results.multiHandLandmarks.length > 0) {
         const landmarks = results.multiHandLandmarks[0];
         
         // 只在前5帧打印详细信息（避免控制台刷屏）
@@ -293,7 +296,10 @@ if (results.multiHandLandmarks && results.multiHandLandmarks.length > 0) {
         function calculateFPS() {
             frameCount++;
             const now = performance.now();
-            
+
+            // 保证 lastFrameTime 已初始化
+            if (!lastFrameTime) lastFrameTime = now;
+
             if (now >= lastFrameTime + 1000) {
                 currentFPS = Math.round((frameCount * 1000) / (now - lastFrameTime));
                 fpsElement.textContent = currentFPS;
@@ -308,27 +314,70 @@ if (results.multiHandLandmarks && results.multiHandLandmarks.length > 0) {
                 startBtn.disabled = true;
                 stopBtn.disabled = false;
                 gestureStatus.textContent = '🔄 正在启动摄像头...';
-                
+
+                // 安全上下文提示（getUserMedia 在非安全环境会被限制）
+                if (location.protocol !== 'https:' && location.hostname !== 'localhost' && location.hostname !== '127.0.0.1') {
+                    console.warn('[Camera] 建议在 HTTPS 或 localhost 下运行以保证摄像头权限正常');
+                    gestureStatus.textContent = '⚠️ 请在 HTTPS 或 localhost 下运行以允许摄像头权限';
+                }
+
                 if (!hands) {
                     initializeHands();
                 }
-                
-                camera = new Camera(videoElement, {
-                    onFrame: async () => {
+
+                // 如果 MediaPipe Camera 可用，则使用它（优先）
+                if (typeof Camera !== 'undefined') {
+                    camera = new Camera(videoElement, {
+                        onFrame: async () => {
+                            if (hands) {
+                                await hands.send({image: videoElement});
+                            }
+                        },
+                        width: 640,
+                        height: 480
+                    });
+
+                    await camera.start();
+                    gestureStatus.textContent = '✅ 摄像头已启动（MediaPipe Camera）';
+                } else {
+                    // fallback: 直接使用 getUserMedia + requestAnimationFrame 发送帧给 hands
+                    if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) {
+                        throw new Error('浏览器不支持 navigator.mediaDevices.getUserMedia');
+                    }
+                    const stream = await navigator.mediaDevices.getUserMedia({ video: { width: 640, height: 480 } });
+                    videoElement.srcObject = stream;
+                    await videoElement.play();
+                    gestureStatus.textContent = '✅ 摄像头已启动（fallback）';
+
+                    // 创建一个简单的 RAF 循环向 hands 发送帧
+                    let rafId = null;
+                    const step = async () => {
                         if (hands) {
-                            await hands.send({image: videoElement});
+                            try {
+                                await hands.send({image: videoElement});
+                            } catch (e) {
+                                // 捕获 send 错误但不中断循环
+                                console.debug('[MediaPipe] hands.send 错误', e);
+                            }
                         }
-                    },
-                    width: 640,
-                    height: 480
-                });
-                
-                await camera.start();
-                gestureStatus.textContent = '✅ 摄像头已启动，请将手放在摄像头前';
-                
+                        rafId = requestAnimationFrame(step);
+                    };
+                    step();
+
+                    // 提供统一的 stop 接口，兼容 MediaPipe Camera.stop()
+                    camera = {
+                        stop: () => {
+                            if (rafId) cancelAnimationFrame(rafId);
+                            try {
+                                const tracks = stream.getTracks();
+                                tracks.forEach(t => t.stop());
+                            } catch (e) {}
+                        }
+                    };
+                }
             } catch (error) {
                 console.error('摄像头启动失败:', error);
-                gestureStatus.textContent = '❌ 摄像头启动失败，请检查权限';
+                gestureStatus.textContent = '❌ 摄像头启动失败，请检查权限或控制台错误';
                 startBtn.disabled = false;
                 stopBtn.disabled = true;
             }
@@ -336,11 +385,19 @@ if (results.multiHandLandmarks && results.multiHandLandmarks.length > 0) {
 
         // 停止摄像头
         function stopCamera() {
-            if (camera) {
-                camera.stop();
-                camera = null;
+            try {
+                if (camera && typeof camera.stop === 'function') {
+                    camera.stop();
+                } else if (videoElement && videoElement.srcObject && videoElement.srcObject.getTracks) {
+                    // 额外保险：停止直接通过 getUserMedia 开启的 stream
+                    videoElement.srcObject.getTracks().forEach(t => t.stop());
+                    videoElement.srcObject = null;
+                }
+            } catch (e) {
+                console.warn('停止摄像头时出现错误', e);
             }
-            
+
+            camera = null;
             startBtn.disabled = false;
             stopBtn.disabled = true;
             gestureStatus.textContent = '摄像头已停止';
@@ -348,7 +405,7 @@ if (results.multiHandLandmarks && results.multiHandLandmarks.length > 0) {
             confidenceElement.textContent = '0';
             fpsElement.textContent = '0';
             landmarkInfoElement.innerHTML = '';
-            
+
             // 清空画布
             canvasCtx.clearRect(0, 0, canvasElement.width, canvasElement.height);
         }
@@ -359,6 +416,8 @@ if (results.multiHandLandmarks && results.multiHandLandmarks.length > 0) {
 
         // 页面加载时初始化
         window.addEventListener('load', () => {
+            // 提前初始化 hands（减少延迟）
+            try { initializeHands(); } catch (e) { /* ignore */ }
             gestureStatus.textContent = '准备就绪，点击"开始摄像头"';
             console.log('手势识别测试环境已加载');
         });

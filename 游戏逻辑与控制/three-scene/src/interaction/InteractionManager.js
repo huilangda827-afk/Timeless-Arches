@@ -1,4 +1,4 @@
-import * as THREE from "three";
+import * as THREE from "https://cdn.jsdelivr.net/npm/three@0.152.2/build/three.module.js";
 
 /**
  * InteractionManager - 交互管理模块
@@ -25,10 +25,19 @@ export class InteractionManager {
     this.depthMax = config.depthMax ?? 10.0;
     this.depthStep = config.depthStep ?? 0.5; // 每次滚轮调节的步长
 
+    // 可配置的拾取/邻近阈值（米）
+    this.proximityPickThreshold = config.proximityPickThreshold ?? 1.2;
+
     // 射线投射器
     this.raycaster = new THREE.Raycaster();
     this.mouseNDC = new THREE.Vector2();
     this.planeHit = new THREE.Vector3();
+    
+    // 锁定的拖拽平面（在抓取开始时设置，用于稳定拖拽）
+    this.activeDragPlane = null;
+    // 调试：虚拟光标（用于显示手势映射的3D位置）
+    this.debugCursor = null;
+    this.slotMarkers = [];
 
     // 鼠标控制状态
     this.mouseSelected = null;
@@ -54,13 +63,28 @@ export class InteractionManager {
    * @param {Object} gestureState - 手势状态对象
    */
   update(deltaTime, gestureState) {
-    // 处理手势控制
-    if (gestureState && gestureState.connected) {
+    // ✅ 修复：简化手势控制逻辑
+    // 只有在手势连接且没有鼠标拖拽时才处理手势
+    if (gestureState && gestureState.connected && !this.mouseDragging) {
       this.updateGestureControl(deltaTime, gestureState);
     }
 
-    // 处理渐进式磁吸
+    // 处理渐进式磁吸（鼠标和手势都适用）
     this.updateMagneticSnap(deltaTime);
+  }
+
+  /**
+   * 初始化调试光标
+   */
+  initDebugCursor() {
+    if (this.debugCursor || !this.scene) return;
+    const geo = new THREE.SphereGeometry(0.06, 8, 8);
+    const mat = new THREE.MeshBasicMaterial({ color: 0xff3333 });
+    this.debugCursor = new THREE.Mesh(geo, mat);
+    this.debugCursor.visible = false;
+    // target position for smoothing
+    this.debugCursorTarget = new THREE.Vector3();
+    this.scene.add(this.debugCursor);
   }
 
   /**
@@ -72,10 +96,22 @@ export class InteractionManager {
     // 使用虚拟光标射线
     this.raycaster.setFromCamera(ndc, this.camera);
 
+    // 调试：初始化并更新光标位置（映射到拖拽平面或深度平面）
+    this.initDebugCursor();
+    const mapped = this.mapNDCTo3D(ndc);
+    if (this.debugCursor) {
+      this.debugCursor.visible = true;
+      if (mapped) {
+        this.debugCursorTarget.copy(mapped);
+      }
+      // 平滑移动光标，避免抖动
+      this.debugCursor.position.lerp(this.debugCursorTarget, 0.18);
+    }
+
     // 抓取边沿：open→fist
     if (edgeGrab && !this.grabbed) {
-      // ✅ 修复模型交互：使用recursive: true以检测GLB模型的子对象
-      const hits = this.raycaster
+        // ✅ 修复模型交互：使用recursive: true以检测GLB模型的子对象
+        let hits = this.raycaster
         .intersectObjects(this.pieces, true)
         .filter((h) => {
           // 找到实际的piece对象（可能是子对象）
@@ -104,22 +140,86 @@ export class InteractionManager {
           this.gestureDragOffset.copy(hitPoint).sub(this.grabbed.position);
         }
 
+        // 锁定拖拽平面为所抓取物体当前的 Y 高度，防止平面随相机/光标波动
+        try {
+          this.activeDragPlane = new THREE.Plane(new THREE.Vector3(0, 1, 0), -this.grabbed.position.y);
+        } catch (e) {}
+
         if (this.onHighlightCallback) {
           this.onHighlightCallback({ piece: this.grabbed, on: true });
         }
       }
+      // 调试：没有命中时打印射线信息和可用 pieces 数量
+      else {
+        try {
+          console.log(`[InteractionManager] edgeGrab: no hits. piecesCount=${this.pieces.length} ndc=(${ndc.x.toFixed(3)},${ndc.y.toFixed(3)})`);
+          // 打印 top-level pieces ids
+          const ids = this.pieces.map(p => p.userData && p.userData.pieceId !== undefined ? p.userData.pieceId : '(no-id)');
+          console.log('[InteractionManager] pieces ids:', ids);
+          // 打印射线原点和方向
+          const ray = this.raycaster.ray;
+          console.log(`[InteractionManager] ray origin=(${ray.origin.x.toFixed(2)},${ray.origin.y.toFixed(2)},${ray.origin.z.toFixed(2)}) dir=(${ray.direction.x.toFixed(2)},${ray.direction.y.toFixed(2)},${ray.direction.z.toFixed(2)})`);
+          // 备用：尝试对 scene 所有子对象进行检测，寻找附近的 piece
+          const fallback = this.raycaster.intersectObjects(this.scene.children, true)
+            .map(h => {
+              let obj = h.object;
+              while (obj && !obj.userData?.pieceId && obj.parent) obj = obj.parent;
+              return { hit: h, object: obj };
+            })
+            .filter(x => x.object && x.object.userData && !x.object.userData.snapped);
+          if (fallback.length) {
+            console.log('[InteractionManager] fallback hits found, using nearest piece:', fallback[0].object.userData.pieceId);
+            this.grabbed = fallback[0].object;
+            this.highlightAll(false);
+            this.highlight(this.grabbed, true);
+            // 计算拖拽偏移
+            const hitPointFb = fallback[0].hit.point;
+            if (hitPointFb) {
+              this.gestureDragOffset.copy(hitPointFb).sub(this.grabbed.position);
+            }
+              // 锁定拖拽平面
+              try {
+                this.activeDragPlane = new THREE.Plane(new THREE.Vector3(0, 1, 0), -this.grabbed.position.y);
+              } catch (e) {}
+          } else {
+            // 备用2：基于映射点寻找最近构件（容差阈值）
+            const mappedPoint = mapped || this.mapNDCTo3D(ndc);
+            if (mappedPoint && this.pieces && this.pieces.length) {
+              let nearest = null;
+              let nearestDist = Infinity;
+              this.pieces.forEach(p => {
+                const d = p.position.distanceTo(mappedPoint);
+                if (d < nearestDist) { nearestDist = d; nearest = p; }
+              });
+              const PICK_THRESHOLD = this.proximityPickThreshold || 1.2; // meters, adjustable
+              if (nearest && nearestDist <= PICK_THRESHOLD) {
+                console.log(`[InteractionManager] proximity pick piece=${nearest.userData.pieceId} dist=${nearestDist.toFixed(3)}`);
+                this.grabbed = nearest;
+                this.highlightAll(false);
+                this.highlight(this.grabbed, true);
+                this.gestureDragOffset.copy(mappedPoint).sub(this.grabbed.position);
+              }
+            }
+          }
+        } catch (e) {}
+      }
     }
 
-    // holding 中：拖动 + 旋转
+    // holding 中：拖动
     if (holding && this.grabbed) {
       const hitPoint = this.mapNDCTo3D(ndc);
       if (hitPoint) {
-        this.grabbed.position.copy(hitPoint.sub(this.gestureDragOffset));
-        this.grabbed.position.y = this.dragPlaneY + this.pieceHoverY;
-      }
-
-      if (rotateDir !== 0) {
-        this.grabbed.rotation.y += rotateDir * this.rotateStep;
+        // 平滑拖拽位置，减少跳动
+        const targetPos = hitPoint.clone().sub(this.gestureDragOffset);
+        // 如果有锁定的拖拽平面，则以该平面的 Y 作为基础，否则使用全局 dragPlaneY
+        let planeBaseY = this.dragPlaneY;
+        if (this.activeDragPlane) {
+          const cp = new THREE.Vector3();
+          this.activeDragPlane.coplanarPoint(cp);
+          planeBaseY = cp.y;
+        }
+        targetPos.y = planeBaseY + this.pieceHoverY;
+        this.grabbed.position.lerp(targetPos, 0.28);
       }
     }
 
@@ -142,6 +242,8 @@ export class InteractionManager {
       this.grabbed = null;
       this.snappingPiece = null;
       this.snappingTarget = null;
+      // 释放时清除锁定的拖拽平面
+      this.activeDragPlane = null;
     }
   }
 
@@ -153,14 +255,10 @@ export class InteractionManager {
   mapNDCTo3D(ndc) {
     this.raycaster.setFromCamera(ndc, this.camera);
 
-    // ✅ 修复：使用拖拽平面（Y平面）进行坐标映射
-    // 创建垂直于 Y 轴的平面，在拖拽平面高度
-    const dragPlane = new THREE.Plane(
-      new THREE.Vector3(0, 1, 0),
-      -this.dragPlaneY
-    );
+    // 优先使用锁定的拖拽平面（在抓取时由 grab 锁定），否则使用全局 Y 平面
+    const planeToUse = this.activeDragPlane || new THREE.Plane(new THREE.Vector3(0, 1, 0), -this.dragPlaneY);
 
-    if (this.raycaster.ray.intersectPlane(dragPlane, this.planeHit)) {
+    if (this.raycaster.ray.intersectPlane(planeToUse, this.planeHit)) {
       return this.planeHit.clone();
     }
     
@@ -172,7 +270,14 @@ export class InteractionManager {
     
     if (this.raycaster.ray.intersectPlane(depthPlane, this.planeHit)) {
       // 将Z平面的交点投影到拖拽平面
-      this.planeHit.y = this.dragPlaneY;
+      // 如果有锁定平面，使用锁定平面的高度；否则使用全局 dragPlaneY
+      if (this.activeDragPlane) {
+        const cp = new THREE.Vector3();
+        this.activeDragPlane.coplanarPoint(cp);
+        this.planeHit.y = cp.y;
+      } else {
+        this.planeHit.y = this.dragPlaneY;
+      }
       return this.planeHit.clone();
     }
     
@@ -236,6 +341,10 @@ export class InteractionManager {
 
       return piece;
     }
+    // 调试：未命中
+    try {
+      console.log(`[InteractionManager] tryGrab: no hits. piecesCount=${this.pieces.length} ndc=(${ndc.x.toFixed(3)},${ndc.y.toFixed(3)})`);
+    } catch (e) {}
     return null;
   }
 
@@ -248,8 +357,20 @@ export class InteractionManager {
 
     const hitPoint = this.mapNDCTo3D(ndc);
     if (hitPoint) {
-      this.grabbed.position.copy(hitPoint.sub(this.gestureDragOffset));
-      this.grabbed.position.y = this.dragPlaneY + this.pieceHoverY;
+      this.grabbed.position.copy(hitPoint).sub(this.gestureDragOffset);
+      // 如果有锁定的拖拽平面，则以该平面的 Y 作为基础，否则使用全局 dragPlaneY
+      let planeBaseY = this.dragPlaneY;
+      if (this.activeDragPlane) {
+        const cp = new THREE.Vector3();
+        this.activeDragPlane.coplanarPoint(cp);
+        planeBaseY = cp.y;
+      }
+      this.grabbed.position.y = planeBaseY + this.pieceHoverY;
+    }
+    // 更新调试光标位置
+    if (this.debugCursor && hitPoint) {
+      this.debugCursor.position.copy(hitPoint);
+      this.debugCursor.visible = true;
     }
   }
 
@@ -397,6 +518,7 @@ export class InteractionManager {
     const highlightColor = on ? 0x666666 : 0x000000;
     
     // 如果是Group，遍历所有子对象
+    if (!obj) return;
     if (obj.children && obj.children.length > 0) {
       obj.traverse((child) => {
         if (child.isMesh && child.material) {
@@ -408,6 +530,13 @@ export class InteractionManager {
           });
         }
       });
+      // 视觉反馈：稍微放大根对象以示选中
+      if (on) {
+        if (!obj.userData._origScale) obj.userData._origScale = obj.scale.clone();
+        obj.scale.multiplyScalar(1.08);
+      } else {
+        if (obj.userData._origScale) obj.scale.copy(obj.userData._origScale);
+      }
     } else if (obj.isMesh && obj.material) {
       // 直接是Mesh
       const materials = Array.isArray(obj.material) ? obj.material : [obj.material];
@@ -416,6 +545,12 @@ export class InteractionManager {
           mat.emissive.setHex(highlightColor);
         }
       });
+      if (on) {
+        if (!obj.userData._origScale) obj.userData._origScale = obj.scale.clone();
+        obj.scale.multiplyScalar(1.08);
+      } else {
+        if (obj.userData._origScale) obj.scale.copy(obj.userData._origScale);
+      }
     }
   }
 
@@ -667,6 +802,24 @@ export class InteractionManager {
   updateSlotsReference(newSlots) {
     this.slots = newSlots;
     console.log(`[InteractionManager] ✅ 已更新slots引用，当前槽位数量: ${newSlots.length}`);
+    // 调试：创建/刷新槽位标记
+    // 清除旧标记
+    try {
+      this.slotMarkers.forEach(m => { if (m.parent) m.parent.remove(m); });
+      this.slotMarkers = [];
+      if (this.scene) {
+        newSlots.forEach((s) => {
+          const geo = new THREE.SphereGeometry(0.04, 8, 8);
+          const mat = new THREE.MeshBasicMaterial({ color: 0x22cc22 });
+          const m = new THREE.Mesh(geo, mat);
+          m.position.copy(s.position);
+          m.position.y = this.dragPlaneY + this.pieceHoverY;
+          m.userData = { markerFor: s.userData && s.userData.slotId };
+          this.scene.add(m);
+          this.slotMarkers.push(m);
+        });
+      }
+    } catch (e) {}
   }
 }
 

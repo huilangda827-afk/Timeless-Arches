@@ -71,7 +71,7 @@ body {
   height: 100%;
   z-index: 1000;
   /* 主菜单背景图（只在主菜单显示时可见） */
-  background: url('/background-menu.jpg') center center / cover no-repeat;
+  background: url('public/background-menu.jpg') center center / cover no-repeat;
   background-color: #000; /* 备用纯色背景 */
   pointer-events: none; /* 默认不拦截事件，让 Three.js 场景可以交互 */
 }

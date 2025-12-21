@@ -1,4 +1,4 @@
-import * as THREE from "three";
+import * as THREE from "https://cdn.jsdelivr.net/npm/three@0.152.2/build/three.module.js";
 import { OrbitControls } from "three/examples/jsm/controls/OrbitControls.js";
 import { GLTFLoader } from "three/examples/jsm/loaders/GLTFLoader.js";
 
@@ -71,8 +71,8 @@ export class SceneManager {
       100
     );
     // ✅ 修复布局：调整相机位置，确保模型在视野中心
-    this.camera.position.set(5, 6, 10);
-    this.camera.lookAt(0, 1, 0); // 看向模型中心（稍微抬高）
+    this.camera.position.set(6, 7, 12);
+    this.camera.lookAt(0, 1.5, 0); // 看向模型中心（稍微抬高）
 
     // 创建渲染器
     this.renderer = new THREE.WebGLRenderer({ antialias: true });
@@ -139,6 +139,11 @@ export class SceneManager {
     }
     
     console.log("[SceneManager] 关卡模型加载完成");
+
+    // 调试：打印加载后 pieces/slots 统计
+    try {
+      console.log(`[SceneManager] pieces=${this.pieces.length} slots=${this.slots.length} base=${this.base ? 'yes' : 'no'}`);
+    } catch (e) {}
   }
 
   /**
@@ -152,7 +157,9 @@ export class SceneManager {
     
     piecesConfig.forEach((pieceConfig) => {
       // 创建槽位几何体（半透明盒子，用于显示目标位置）
-      const slotGeo = new THREE.BoxGeometry(1, 0.35, 1);
+      // 槽位适当放大以匹配构件放大比例
+      const SLOT_SCALE = 1.6;
+      const slotGeo = new THREE.BoxGeometry(1 * SLOT_SCALE, 0.35 * SLOT_SCALE, 1 * SLOT_SCALE);
       const slotMat = new THREE.MeshStandardMaterial({
         color: 0x777777,
         transparent: true,
@@ -164,7 +171,7 @@ export class SceneManager {
       // 设置槽位位置和旋转（使用目标位置）
       if (pieceConfig.targetPosition) {
         slot.position.copy(pieceConfig.targetPosition);
-        slot.position.y = this.dragPlaneY + 0.18; // 稍微抬高
+        slot.position.y = this.dragPlaneY + 0.18 * SLOT_SCALE; // 稍微抬高
       }
       if (pieceConfig.targetRotation) {
         slot.rotation.set(
@@ -295,15 +302,31 @@ export class SceneManager {
           (gltf) => {
             const model = gltf.scene;
             
-            // ✅ 修复布局：自动调整模型尺寸（构件统一尺寸）
-            this.adjustModelSize(model, 1.0);
+            // ✅ 修复布局：自动调整模型尺寸（构件统一尺寸），并放大以增强视觉效果
+            // 先计算边界框，确保模型可见
+            const box = new THREE.Box3().setFromObject(model);
+            const size = box.getSize(new THREE.Vector3());
+            const maxDimension = Math.max(size.x, size.y, size.z);
+            
+            // 如果模型太小或太大，进行缩放
+            if (maxDimension > 0.01) {
+              const targetSize = 1.6; // 放大视觉效果
+              if (Math.abs(maxDimension - targetSize) > 0.05) {
+                const scale = targetSize / maxDimension;
+                model.scale.multiplyScalar(scale);
+                console.log(`[SceneManager] 构件 [${index}] 已缩放: ${maxDimension.toFixed(3)} → ${targetSize.toFixed(3)}`);
+              }
+            }
             
             // 设置初始位置（散落状态）
             if (pieceConfig.startPosition) {
               model.position.copy(pieceConfig.startPosition);
+              // 抬高至拖拽平面上方，避免与地面重叠
+              model.position.y = this.dragPlaneY + this.pieceHoverY;
             } else if (pieceConfig.targetPosition) {
-              // 如果没有初始位置，使用目标位置
+              // 如果没有初始位置，使用目标位置并抬高为可抓取状态
               model.position.copy(pieceConfig.targetPosition);
+              model.position.y = this.dragPlaneY + this.pieceHoverY;
             }
             
             // 设置旋转
@@ -502,7 +525,8 @@ export class SceneManager {
    */
   createPuzzle() {
     // 创建槽位
-    const slotGeo = new THREE.BoxGeometry(1, 0.35, 1);
+    const SLOT_SCALE = 1.6;
+    const slotGeo = new THREE.BoxGeometry(1 * SLOT_SCALE, 0.35 * SLOT_SCALE, 1 * SLOT_SCALE);
     const slotMatBase = new THREE.MeshStandardMaterial({
       color: 0x777777,
       transparent: true,
@@ -510,9 +534,9 @@ export class SceneManager {
     });
 
     const slotPositions = [
-      new THREE.Vector3(-3, this.dragPlaneY + 0.18, 0),
-      new THREE.Vector3(0, this.dragPlaneY + 0.18, 0),
-      new THREE.Vector3(3, this.dragPlaneY + 0.18, 0),
+      new THREE.Vector3(-3, this.dragPlaneY + 0.18 * SLOT_SCALE, 0),
+      new THREE.Vector3(0, this.dragPlaneY + 0.18 * SLOT_SCALE, 0),
+      new THREE.Vector3(3, this.dragPlaneY + 0.18 * SLOT_SCALE, 0),
     ];
     const slotRot = [0, Math.PI / 4, -Math.PI / 4];
 
@@ -530,7 +554,8 @@ export class SceneManager {
     });
 
     // 创建构件
-    const pieceGeo = new THREE.BoxGeometry(1, 1, 1);
+    const PIECE_SCALE = 1.6;
+    const pieceGeo = new THREE.BoxGeometry(1 * PIECE_SCALE, 1 * PIECE_SCALE, 1 * PIECE_SCALE);
     const colors = [0xff6666, 0x66ff66, 0x6666ff];
     const startPositions = [
       new THREE.Vector3(-4, this.dragPlaneY + this.pieceHoverY, -3),

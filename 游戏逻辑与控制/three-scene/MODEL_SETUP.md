@@ -48,3 +48,5 @@ Copy-Item "..\..\建模\*.glb" -Destination "public\models\" -Force
 2. **路径**：模型路径是 `/models/文件名.glb`（相对于 public 目录）
 3. **如果模型加载失败**：系统会自动使用测试立方体作为备用
 
+
+

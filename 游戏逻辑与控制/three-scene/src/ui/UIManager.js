@@ -33,7 +33,8 @@ export class UIManager {
       `Phase: <span id="hudPhase"></span><br/>` +
       `Input: <span id="hudInput"></span><br/>` +
       `Grabbed: <span id="hudGrab"></span><br/>` +
-      `Tip: fist=grab/move, open=release+snap, thumb=L/R rotate`;
+      `Tip: fist=grab/move, open=release+snap, thumb=L/R rotate<br/>` +
+      `Debug: <span id="hudDebug"></span>`;
     document.body.appendChild(hud);
     this.hudElement = hud;
 
@@ -58,6 +59,161 @@ export class UIManager {
       uiContainerElement: !!this.uiContainerElement,
       sceneManager: !!this.sceneManager,
     });
+
+    // 创建本地摄像头 overlay（延迟创建）
+    this._createCameraOverlay();
+  }
+
+  /**
+   * 设置手势调试信息显示（短文本）
+   * @param {string} txt
+   */
+  setHandDebug(txt) {
+    try {
+      const el = document.getElementById('hudDebug');
+      if (el) el.textContent = txt;
+    } catch (e) {}
+  }
+
+  /**
+   * 创建摄像头视频与手势 overlay DOM 元素
+   */
+  _createCameraOverlay() {
+    try {
+      // video container
+      const container = document.createElement('div');
+      container.id = 'camera-container';
+      container.style.position = 'fixed';
+      container.style.right = '12px';
+      container.style.top = '80px';
+      container.style.width = '320px';
+      container.style.height = '240px';
+      container.style.background = 'rgba(0,0,0,0.35)';
+      container.style.borderRadius = '8px';
+      container.style.overflow = 'hidden';
+      container.style.display = 'none';
+      container.style.zIndex = '10002';
+      container.style.pointerEvents = 'auto';
+
+      const video = document.createElement('video');
+      video.id = 'local-camera-video';
+      video.autoplay = true;
+      video.playsInline = true;
+      video.muted = true;
+      video.style.width = '100%';
+      video.style.height = '100%';
+      video.style.objectFit = 'cover';
+      container.appendChild(video);
+
+      // overlay hand indicator
+      const hand = document.createElement('div');
+      hand.id = 'hand-overlay';
+      hand.style.position = 'fixed';
+      hand.style.width = '48px';
+      hand.style.height = '48px';
+      hand.style.background = 'rgba(255,200,120,0.95)';
+      hand.style.borderRadius = '50%';
+      hand.style.boxShadow = '0 4px 12px rgba(0,0,0,0.4)';
+      hand.style.pointerEvents = 'none';
+      hand.style.display = 'none';
+      hand.style.zIndex = '10003';
+
+      document.body.appendChild(container);
+      document.body.appendChild(hand);
+
+      this._cameraContainer = container;
+      this._cameraVideo = video;
+      this._handOverlay = hand;
+      this._handFollowMode = false; // 当为 true 时，手势由视频内鼠标控制（本地调试）
+
+      // video mouse move -> move overlay when follow mode is on
+      video.addEventListener('mousemove', (ev) => {
+        if (!this._handFollowMode) return;
+        const rect = video.getBoundingClientRect();
+        const x = ev.clientX; const y = ev.clientY;
+        this.setHandOverlayPosition(x, y, false);
+      });
+
+      // 找到 HUD 的按钮并绑定事件
+      const btnCam = document.getElementById('btn-open-camera');
+      const btnFollow = document.getElementById('btn-toggle-hand-follow');
+      if (btnCam) {
+        btnCam.addEventListener('click', async () => {
+          if (this._cameraContainer.style.display === 'none') {
+            try {
+              const stream = await navigator.mediaDevices.getUserMedia({ video: true });
+              this._cameraVideo.srcObject = stream;
+              this._cameraContainer.style.display = 'block';
+              // 打开摄像头时同时显示手势 overlay（若存在）
+              try { if (this._handOverlay) this._handOverlay.style.display = 'block'; } catch (e) {}
+              // 通知外部：本地摄像头已打开（用于启动浏览器端 MediaPipe）
+              try { if (this._onLocalCameraToggle) this._onLocalCameraToggle(this._cameraVideo, true); } catch (e) {}
+              // 显示 center 提示为本地摄像头已启用（不代表手势识别已接入）
+              const center = document.getElementById('hud-center-status');
+              if (center) {
+                const span = center.querySelector('.center-status-text');
+                if (span) span.textContent = '本地摄像头已启用（未接入手势服务）';
+              }
+            } catch (e) {
+              console.error('[UIManager] 无法打开摄像头:', e);
+            }
+          } else {
+            // 关闭摄像头
+            try {
+              const s = this._cameraVideo.srcObject;
+              if (s && s.getTracks) s.getTracks().forEach(t => t.stop());
+            } catch (e) {}
+            this._cameraVideo.srcObject = null;
+            this._cameraContainer.style.display = 'none';
+            this._handOverlay.style.display = 'none';
+            try { if (this._onLocalCameraToggle) this._onLocalCameraToggle(this._cameraVideo, false); } catch (e) {}
+            const center = document.getElementById('hud-center-status');
+            if (center) {
+              const span = center.querySelector('.center-status-text');
+              if (span) span.textContent = '手势未连接 - 使用模拟器或鼠标模式';
+            }
+          }
+        }, false);
+      }
+      if (btnFollow) {
+        btnFollow.addEventListener('click', () => {
+          this._handFollowMode = !this._handFollowMode;
+          btnFollow.textContent = this._handFollowMode ? '追踪: 鼠标' : '手动追踪';
+        }, false);
+      }
+    } catch (e) {
+      console.warn('[UIManager] 无法创建摄像头 overlay', e);
+    }
+  }
+
+  /**
+   * 注册本地摄像头开启/关闭回调：callback(videoElement, open:boolean)
+   */
+  onLocalCameraToggle(callback) {
+    this._onLocalCameraToggle = callback;
+  }
+
+  /**
+   * 设置手势 overlay 屏幕坐标（由外部调用）
+   * @param {number} screenX - 屏幕像素 X
+   * @param {number} screenY - 屏幕像素 Y
+   * @param {boolean} holding - 是否为抓取状态（改变样式）
+   */
+  setHandOverlayPosition(screenX, screenY, holding = false) {
+    try {
+      if (!this._handOverlay) return;
+      // 仅在本地摄像头可见或手动追踪模式开启时显示 overlay
+      const cameraVisible = this._cameraContainer && this._cameraContainer.style && this._cameraContainer.style.display !== 'none';
+      if (!cameraVisible && !this._handFollowMode) {
+        this._handOverlay.style.display = 'none';
+        return;
+      }
+      this._handOverlay.style.left = `${Math.round(screenX - 24)}px`;
+      this._handOverlay.style.top = `${Math.round(screenY - 24)}px`;
+      this._handOverlay.style.display = (cameraVisible || this._handFollowMode) ? 'block' : 'none';
+      this._handOverlay.style.transform = holding ? 'scale(0.9)' : 'scale(1)';
+      this._handOverlay.style.background = holding ? 'rgba(200,80,80,0.95)' : 'rgba(255,200,120,0.95)';
+    } catch (e) {}
   }
 
   /**
@@ -172,6 +328,16 @@ export class UIManager {
       console.log("[UIManager] ✅ 开始筑梦按钮事件已绑定（多种方式）");
     } else {
       console.error("[UIManager] ❌ 未找到 btn-start 按钮！");
+    }
+
+    // 备用全局捕获：如果 UI 按钮被覆盖或事件被阻断，监听 document 指针事件并触发按钮
+    if (!btnStart) {
+      document.addEventListener('pointerdown', (e) => {
+        const el = document.elementFromPoint(e.clientX, e.clientY);
+        if (el && el.id === 'btn-start') {
+          el.click();
+        }
+      }, { capture: true });
     }
 
     if (btnCollection) {
@@ -357,8 +523,38 @@ export class UIManager {
    * @param {number} duration - 显示时长（毫秒），0 表示永久显示
    */
   showMessage(text, duration = 0) {
-    // 可以扩展为显示临时消息的浮层
-    console.log(`[UIManager] ${text}`);
+    // 显示临时居中消息浮层
+    try {
+      let existing = document.getElementById('ui-message-overlay');
+      if (!existing) {
+        existing = document.createElement('div');
+        existing.id = 'ui-message-overlay';
+        existing.style.position = 'fixed';
+        existing.style.left = '50%';
+        existing.style.top = '10%';
+        existing.style.transform = 'translateX(-50%)';
+        existing.style.padding = '12px 18px';
+        existing.style.background = 'rgba(0,0,0,0.7)';
+        existing.style.color = '#fff';
+        existing.style.fontSize = '16px';
+        existing.style.borderRadius = '8px';
+        existing.style.zIndex = '10001';
+        existing.style.pointerEvents = 'none';
+        document.body.appendChild(existing);
+      }
+      existing.textContent = text;
+      existing.style.display = 'block';
+
+      if (duration && duration > 0) {
+        clearTimeout(existing._hideTimer);
+        existing._hideTimer = setTimeout(() => {
+          existing.style.display = 'none';
+        }, duration);
+      }
+      console.log(`[UIManager] ${text}`);
+    } catch (e) {
+      console.log(`[UIManager] ${text}`);
+    }
   }
 
   /**

@@ -165,3 +165,5 @@ export const level1Config = {
 3. 调整 `snapThreshold` 参数优化吸附体验
 4. 配置构件的 `startPosition`（散落位置）
 
+
+

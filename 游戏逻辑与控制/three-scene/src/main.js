@@ -1,6 +1,7 @@
-import * as THREE from "three";
+import * as THREE from "https://cdn.jsdelivr.net/npm/three@0.152.2/build/three.module.js";
 import { SceneManager } from "./core/SceneManager.js";
 import { HandInput } from "./core/HandInput.js";
+import BrowserHands from "./core/BrowserHands.js";
 import { EffectManager } from "./core/EffectManager.js";
 import { InteractionManager } from "./interaction/InteractionManager.js";
 import { GameLogic } from "./game/GameLogic.js";
@@ -16,7 +17,8 @@ const CONFIG = {
   rotateStep: 0.12,
   rotateHoldMs: 160,
   gestureHz: 30,
-  smoothAlpha: 0.35,
+  // 增强平滑，减少抖动（鼠标模式仍灵敏）
+  smoothAlpha: 0.72,
   staleMs: 320,
   wsUrl: "ws://localhost:12345",
   wsRetryMs: 900,
@@ -28,6 +30,8 @@ const CONFIG = {
 // ===================== 模块实例 =====================
 let sceneManager, handInput, effectManager, interactionManager, gameLogic, uiManager;
 let lastFrameTime = performance.now();
+// 是否优先使用浏览器端 MediaPipe（纯前端模式），如果为 true 将跳过 WebSocket 初始化
+const USE_BROWSER_HANDS = true;
 
 // ===================== 初始化 =====================
 function init() {
@@ -51,6 +55,7 @@ function init() {
     depthPlane: CONFIG.depthPlane,
     depthMin: CONFIG.depthMin,
     depthMax: CONFIG.depthMax,
+    proximityPickThreshold: 1.2,
   });
   
   // ✅ 阶段2：加载GLB模型（替换测试立方体）
@@ -85,6 +90,8 @@ function init() {
   gameLogic.onCompleted(() => {
     effectManager.spawnWinFx();
     sceneManager.getControls().enabled = true;
+    // 显示完成提示
+    try { uiManager.showMessage('拼接完成！恭喜，使用鼠标可尝试独立控制每个构件。', 3500); } catch (e) {}
   });
 
   // 初始化手势输入
@@ -96,22 +103,68 @@ function init() {
     staleMs: CONFIG.staleMs,
     rotateStep: CONFIG.rotateStep,
     rotateHoldMs: CONFIG.rotateHoldMs,
+    // 允许在未连接手势服务器时仍接收本地输入（便于本地调试/鼠标模式）
+    // 如需严格依赖远端手势服务以关闭本地输入，请将此项设为 false
+    allowLocalInput: true,
   });
   handInput.onGesture((event) => {
     if (event.type === "update") {
-      // 手势更新由 update 循环处理
+      // 调试：在控制台显示手势更新摘要
+      try {
+        const g = event.gesture;
+        console.log('[Main] HandInput update ndc:', g.ndc.x.toFixed(3), g.ndc.y.toFixed(3), 'holding:', g.holding, 'edgeGrab:', g.edgeGrab, 'edgeRelease:', g.edgeRelease);
+        // 将 NDC 映射到屏幕坐标并更新 UI 手势 overlay（如果存在）
+        try {
+          const canvas = sceneManager.getRenderer().domElement;
+          const w = canvas.clientWidth;
+          const h = canvas.clientHeight;
+          const sx = ((g.ndc.x + 1) / 2) * w + canvas.getBoundingClientRect().left;
+          const sy = ((1 - g.ndc.y) / 2) * h + canvas.getBoundingClientRect().top;
+          if (uiManager && uiManager.setHandOverlayPosition) uiManager.setHandOverlayPosition(sx, sy, g.holding);
+        } catch (e) {}
+      } catch (e) {}
     } else if (event.type === "connected" || event.type === "disconnected") {
+      console.log('[Main] HandInput', event.type);
       updateUI();
     }
   });
-  handInput.init();
+  // 仅在未使用浏览器端直连时初始化 WebSocket 客户端
+  if (!USE_BROWSER_HANDS) {
+    handInput.init();
+  } else {
+    console.log('[Main] 使用浏览器端 MediaPipe（BrowserHands），已跳过 WebSocket 初始化');
+  }
 
   // 初始化 UI 管理器（传入 sceneManager 以便控制渲染器交互）
   uiManager = new UIManager(sceneManager);
+  // 浏览器端 MediaPipe（可选）：在本地摄像头开启时启动
+  const browserHands = new BrowserHands();
+  uiManager.onLocalCameraToggle((video, open) => {
+    try {
+      if (open) {
+        browserHands.start(video, (g) => {
+          // g: { gesture, x, y } (0-1)
+          try { handInput.applyGestureInput(g); } catch (e) {}
+          try {
+            // 显示调试信息到 HUD（raw 及 NDC）
+            if (uiManager && uiManager.setHandDebug) {
+              const ndcX = (g.x * 2 - 1).toFixed(3);
+              const ndcY = (1 - 2 * g.y).toFixed(3);
+              uiManager.setHandDebug(`${g.gesture} raw=(${g.x.toFixed(3)},${g.y.toFixed(3)}) ndc=(${ndcX},${ndcY})`);
+            }
+          } catch (e) {}
+        });
+      } else {
+        browserHands.stop();
+      }
+    } catch (e) { console.error('[Main] BrowserHands toggle error', e); }
+  });
   uiManager.onStartGame(() => {
     // 开始游戏时，可以在这里初始化游戏状态
     gameLogic.setPhase(gameLogic.Phase.Ready);
     console.log("[Main] 游戏开始");
+    // 确保渲染器可以接收鼠标事件
+    try { sceneManager.setRendererPointerEvents(true); } catch (e) {}
   });
 
   // 绑定鼠标事件
@@ -211,6 +264,16 @@ function updateUI() {
   const grabbed = interactionManager.getGrabbed();
   const grabText = grabbed ? `piece ${grabbed.userData.pieceId}` : "none";
   uiManager.update(phase, input, grabText);
+
+  // 更新中心状态提示（摄像头/手势状态）
+  try {
+    const center = document.getElementById('hud-center-status');
+    if (center) {
+      const txt = handInput.isConnected() ? '手势服务已连接（非摄像头直连）' : '手势未连接 - 使用模拟器或鼠标模式';
+      const span = center.querySelector('.center-status-text');
+      if (span) span.textContent = txt;
+    }
+  } catch (e) {}
 }
 
 // ===================== 渲染循环 =====================
