@@ -1,0 +1,367 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>手势识别测试 - 阶段1</title>
+    <style>
+        body {
+            margin: 0;
+            padding: 20px;
+            font-family: 'Microsoft YaHei', sans-serif;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            min-height: 100vh;
+        }
+        
+        .container {
+            max-width: 1200px;
+            margin: 0 auto;
+            text-align: center;
+        }
+        
+        h1 {
+            margin-bottom: 10px;
+            text-shadow: 2px 2px 4px rgba(0,0,0,0.3);
+        }
+        
+        .subtitle {
+            margin-bottom: 30px;
+            opacity: 0.9;
+        }
+        
+        .video-container {
+            display: flex;
+            justify-content: center;
+            gap: 20px;
+            margin-bottom: 30px;
+            flex-wrap: wrap;
+        }
+        
+        .video-box {
+            background: rgba(255, 255, 255, 0.1);
+            border-radius: 10px;
+            padding: 10px;
+            box-shadow: 0 4px 15px rgba(0, 0, 0, 0.2);
+        }
+        
+        .video-box h3 {
+            margin: 0 0 10px 0;
+        }
+        
+        video, canvas {
+            border-radius: 5px;
+            max-width: 100%;
+            height: auto;
+        }
+        
+        .stats {
+            background: rgba(255, 255, 255, 0.1);
+            border-radius: 10px;
+            padding: 15px;
+            margin: 20px auto;
+            max-width: 600px;
+            text-align: left;
+        }
+        
+        .controls {
+            margin: 20px 0;
+        }
+        
+        button {
+            background: #4CAF50;
+            color: white;
+            border: none;
+            padding: 10px 20px;
+            border-radius: 5px;
+            cursor: pointer;
+            font-size: 16px;
+            margin: 0 10px;
+            transition: background 0.3s;
+        }
+        
+        button:hover {
+            background: #45a049;
+        }
+        
+        button:disabled {
+            background: #cccccc;
+            cursor: not-allowed;
+        }
+        
+        #gestureStatus {
+            font-size: 18px;
+            font-weight: bold;
+            margin: 15px 0;
+            min-height: 27px;
+        }
+        
+        .landmark-info {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+            gap: 10px;
+            margin-top: 15px;
+        }
+        
+        .landmark-item {
+            background: rgba(255, 255, 255, 0.05);
+            padding: 5px 10px;
+            border-radius: 5px;
+            font-family: monospace;
+            font-size: 12px;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>🧠 手势识别环境测试</h1>
+        <p class="subtitle">阶段1：基础MediaPipe手部关节点检测</p>
+        
+        <div class="controls">
+            <button id="startBtn">开始摄像头</button>
+            <button id="stopBtn" disabled>停止摄像头</button>
+        </div>
+        
+        <div id="gestureStatus">点击"开始摄像头"按钮</div>
+        
+        <div class="video-container">
+            <div class="video-box">
+                <h3>📹 摄像头画面</h3>
+                <video id="inputVideo" width="640" height="480" autoplay playsinline></video>
+            </div>
+            <div class="video-box">
+                <h3>🎨 识别结果</h3>
+                <canvas id="outputCanvas" width="640" height="480"></canvas>
+            </div>
+        </div>
+        
+        <div class="stats">
+            <h3>实时数据</h3>
+            <div>检测到的手数量: <span id="handCount">0</span></div>
+            <div>识别置信度: <span id="confidence">0</span></div>
+            <div>帧率: <span id="fps">0</span> FPS</div>
+            
+            <div class="landmark-info" id="landmarkInfo">
+                <!-- 关节点信息会动态显示在这里 -->
+            </div>
+        </div>
+    </div>
+
+    <!-- 引入MediaPipe的CDN -->
+    <script src="https://cdn.jsdelivr.net/npm/@mediapipe/camera_utils/camera_utils.js" crossorigin="anonymous"></script>
+    <script src="https://cdn.jsdelivr.net/npm/@mediapipe/control_utils/control_utils.js" crossorigin="anonymous"></script>
+    <script src="https://cdn.jsdelivr.net/npm/@mediapipe/drawing_utils/drawing_utils.js" crossorigin="anonymous"></script>
+    <script src="https://cdn.jsdelivr.net/npm/@mediapipe/hands/hands.js" crossorigin="anonymous"></script>
+
+    <script>
+        // 全局变量
+        let hands = null;
+        let camera = null;
+        let lastFrameTime = 0;
+        let frameCount = 0;
+        let currentFPS = 0;
+
+        // DOM元素
+        const videoElement = document.getElementById('inputVideo');
+        const canvasElement = document.getElementById('outputCanvas');
+        const canvasCtx = canvasElement.getContext('2d');
+        const startBtn = document.getElementById('startBtn');
+        const stopBtn = document.getElementById('stopBtn');
+        const gestureStatus = document.getElementById('gestureStatus');
+        const handCountElement = document.getElementById('handCount');
+        const confidenceElement = document.getElementById('confidence');
+        const fpsElement = document.getElementById('fps');
+        const landmarkInfoElement = document.getElementById('landmarkInfo');
+
+        // 初始化MediaPipe Hands
+        function initializeHands() {
+            hands = new Hands({
+                locateFile: (file) => {
+                    return `https://cdn.jsdelivr.net/npm/@mediapipe/hands/${file}`;
+                }
+            });
+
+            hands.setOptions({
+                maxNumHands: 2,
+                modelComplexity: 1,
+                minDetectionConfidence: 0.5,
+                minTrackingConfidence: 0.5
+            });
+
+            hands.onResults(onResults);
+        }
+
+        // 处理识别结果
+        function onResults(results) {
+            // 计算帧率
+            calculateFPS();
+if (results.multiHandLandmarks && results.multiHandLandmarks.length > 0) {
+        const landmarks = results.multiHandLandmarks[0];
+        
+        // 只在前5帧打印详细信息（避免控制台刷屏）
+        if (typeof window.logFrameCount === 'undefined') {
+            window.logFrameCount = 0;
+        }
+        
+        if (window.logFrameCount < 5) {
+            console.log("=== 关节点验证 ===");
+            console.log("手腕 (0):", landmarks[0]);
+            console.log("拇指尖 (4):", landmarks[4]);
+            console.log("食指尖 (8):", landmarks[8]);
+            console.log("中指尖 (12):", landmarks[12]);
+            console.log("无名指尖 (16):", landmarks[16]);
+            console.log("小指尖 (20):", landmarks[20]);
+            console.log("=================");
+            window.logFrameCount++;
+        }
+        
+        // 持续显示关键点状态（简洁版）
+        if (window.logFrameCount >= 5 && window.logFrameCount % 10 === 0) {
+            const wrist = landmarks[0];
+            const thumb = landmarks[4];
+            const index = landmarks[8];
+            console.log(`手部位置 - 腕:(${wrist.x.toFixed(2)},${wrist.y.toFixed(2)}) 拇指:(${thumb.x.toFixed(2)},${thumb.y.toFixed(2)}) 食指:(${index.x.toFixed(2)},${index.y.toFixed(2)})`);
+        }
+        
+        if (window.logFrameCount >= 5) {
+            window.logFrameCount++;
+        }
+    }
+            
+            // 绘制摄像头画面
+            canvasCtx.save();
+            canvasCtx.clearRect(0, 0, canvasElement.width, canvasElement.height);
+            canvasCtx.drawImage(results.image, 0, 0, canvasElement.width, canvasElement.height);
+            
+            // 如果有检测到手，绘制关节点和连接线
+            if (results.multiHandLandmarks) {
+                handCountElement.textContent = results.multiHandLandmarks.length;
+                
+                for (const landmarks of results.multiHandLandmarks) {
+                    // 绘制连接线
+                    drawConnectors(canvasCtx, landmarks, HAND_CONNECTIONS, {
+                        color: '#00FF00',
+                        lineWidth: 2
+                    });
+                    
+                    // 绘制关节点
+                    drawLandmarks(canvasCtx, landmarks, {
+                        color: '#FF0000',
+                        lineWidth: 1,
+                        radius: 3
+                    });
+                    
+                    // 显示第一个手的关节点信息（用于调试）
+                    if (landmarks === results.multiHandLandmarks[0]) {
+                        displayLandmarkInfo(landmarks);
+                    }
+                }
+                
+                gestureStatus.textContent = `✅ 检测到 ${results.multiHandLandmarks.length} 只手`;
+                confidenceElement.textContent = (results.multiHandWorldLandmarks ? '高' : '中');
+            } else {
+                handCountElement.textContent = '0';
+                gestureStatus.textContent = '❌ 未检测到手部';
+                confidenceElement.textContent = '低';
+                landmarkInfoElement.innerHTML = '';
+            }
+            
+            canvasCtx.restore();
+        }
+
+        // 显示关节点坐标信息
+        function displayLandmarkInfo(landmarks) {
+            let html = '';
+            const keyPoints = [
+                {index: 0, name: '手腕'},
+                {index: 4, name: '拇指尖'},
+                {index: 8, name: '食指尖'},
+                {index: 12, name: '中指尖'},
+                {index: 16, name: '无名指尖'},
+                {index: 20, name: '小指尖'}
+            ];
+            
+            keyPoints.forEach(point => {
+                const landmark = landmarks[point.index];
+                html += `<div class="landmark-item">${point.name}: (${landmark.x.toFixed(2)}, ${landmark.y.toFixed(2)})</div>`;
+            });
+            
+            landmarkInfoElement.innerHTML = html;
+        }
+
+        // 计算帧率
+        function calculateFPS() {
+            frameCount++;
+            const now = performance.now();
+            
+            if (now >= lastFrameTime + 1000) {
+                currentFPS = Math.round((frameCount * 1000) / (now - lastFrameTime));
+                fpsElement.textContent = currentFPS;
+                frameCount = 0;
+                lastFrameTime = now;
+            }
+        }
+
+        // 启动摄像头
+        async function startCamera() {
+            try {
+                startBtn.disabled = true;
+                stopBtn.disabled = false;
+                gestureStatus.textContent = '🔄 正在启动摄像头...';
+                
+                if (!hands) {
+                    initializeHands();
+                }
+                
+                camera = new Camera(videoElement, {
+                    onFrame: async () => {
+                        if (hands) {
+                            await hands.send({image: videoElement});
+                        }
+                    },
+                    width: 640,
+                    height: 480
+                });
+                
+                await camera.start();
+                gestureStatus.textContent = '✅ 摄像头已启动，请将手放在摄像头前';
+                
+            } catch (error) {
+                console.error('摄像头启动失败:', error);
+                gestureStatus.textContent = '❌ 摄像头启动失败，请检查权限';
+                startBtn.disabled = false;
+                stopBtn.disabled = true;
+            }
+        }
+
+        // 停止摄像头
+        function stopCamera() {
+            if (camera) {
+                camera.stop();
+                camera = null;
+            }
+            
+            startBtn.disabled = false;
+            stopBtn.disabled = true;
+            gestureStatus.textContent = '摄像头已停止';
+            handCountElement.textContent = '0';
+            confidenceElement.textContent = '0';
+            fpsElement.textContent = '0';
+            landmarkInfoElement.innerHTML = '';
+            
+            // 清空画布
+            canvasCtx.clearRect(0, 0, canvasElement.width, canvasElement.height);
+        }
+
+        // 事件监听
+        startBtn.addEventListener('click', startCamera);
+        stopBtn.addEventListener('click', stopCamera);
+
+        // 页面加载时初始化
+        window.addEventListener('load', () => {
+            gestureStatus.textContent = '准备就绪，点击"开始摄像头"';
+            console.log('手势识别测试环境已加载');
+        });
+    </script>
+</body>
+</html>

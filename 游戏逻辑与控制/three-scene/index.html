@@ -1,0 +1,234 @@
+<!doctype html>
+<html lang="zh-CN">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>拾光筑梦 - Timeless Arches</title>
+    <link rel="stylesheet" href="/src/style.css" />
+  </head>
+  <body>
+    <!-- Three.js 渲染容器（由 main.js 自动创建） -->
+    
+    <!-- UI 覆盖层 -->
+    <div id="ui-layer">
+      <!-- 主菜单页面 -->
+      <div class="page-menu" id="page-menu">
+        <h1 class="main-title">拾光筑梦</h1>
+        <p class="main-subtitle">指尖重现千年斗拱</p>
+        
+        <div class="menu-buttons">
+          <button class="btn btn-primary" id="btn-start">
+            <span>开始筑梦</span>
+          </button>
+          <button class="btn btn-outline" id="btn-collection">
+            <span>我的藏阁</span>
+          </button>
+          <button class="btn btn-outline" id="btn-login">
+            <span>登录/注册</span>
+          </button>
+          <button class="btn btn-outline" id="btn-settings">
+            <span>秘境设置</span>
+          </button>
+        </div>
+      </div>
+
+      <!-- 游戏HUD页面 -->
+      <div class="page-game-hud" id="page-game-hud" style="display: none;">
+        <!-- 顶部状态栏 -->
+        <div class="hud-top">
+          <div class="hud-status">
+            <span class="status-text" id="status-text">「单翘斗拱」搭建中...</span>
+          </div>
+          <button class="btn-favorite" id="btn-favorite">
+            <svg width="24" height="24" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
+              <path d="M12 21.35l-1.45-1.32C5.4 15.36 2 12.28 2 8.5 2 5.42 4.42 3 7.5 3c1.74 0 3.41.81 4.5 2.09C13.09 3.81 14.76 3 16.5 3 19.58 3 22 5.42 22 8.5c0 3.78-3.4 6.86-8.55 11.54L12 21.35z" fill="currentColor"/>
+            </svg>
+          </button>
+        </div>
+
+        <!-- 左侧手势指引 -->
+        <div class="hud-gesture-guide">
+          <div class="guide-header">
+            <span class="guide-icon">👋</span>
+            <span class="guide-title">手势指引</span>
+          </div>
+          <div class="guide-list">
+            <div class="guide-item">
+              <span class="guide-number">1</span>
+              <span class="guide-text">张开手掌 旋转组件</span>
+            </div>
+            <div class="guide-item">
+              <span class="guide-number">2</span>
+              <span class="guide-text">握拳 抓取组件</span>
+            </div>
+          </div>
+        </div>
+
+        <!-- 中央状态提示 -->
+        <div class="hud-center-status" id="hud-center-status">
+          <span class="center-status-text">摄像头已启动 - 捕捉手势中</span>
+        </div>
+
+        <!-- 底部控制按钮 -->
+        <div class="hud-bottom">
+          <button class="btn-circle" id="btn-home" title="返回主页">
+            <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+              <path d="M3 9l9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/>
+              <polyline points="9 22 9 12 15 12 15 22"/>
+            </svg>
+          </button>
+          <button class="btn-circle" id="btn-undo" title="撤销">
+            <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+              <path d="M3 7v6h6"/>
+              <path d="M21 17a9 9 0 00-9-9 9 9 0 00-6 2.3L3 13"/>
+            </svg>
+          </button>
+          <button class="btn-circle" id="btn-pause" title="暂停">
+            <svg width="24" height="24" viewBox="0 0 24 24" fill="currentColor">
+              <rect x="6" y="4" width="4" height="16"/>
+              <rect x="14" y="4" width="4" height="16"/>
+            </svg>
+          </button>
+        </div>
+      </div>
+
+      <!-- 覆盖层页面（登录/设置/结算等模态框） -->
+      <div class="page-overlays">
+        <!-- 登录页面（模态框） -->
+        <div class="modal-overlay" id="page-login">
+        <div class="modal-container login-modal">
+          <button class="modal-close" id="login-close">&times;</button>
+          <h2 class="modal-title">登录</h2>
+          <p class="modal-subtitle">欢迎回到拾光筑梦</p>
+          
+          <form class="login-form">
+            <div class="form-group">
+              <label for="login-account">账号 / 邮箱</label>
+              <input 
+                type="text" 
+                id="login-account" 
+                class="form-input" 
+                placeholder="请输入账号"
+                autocomplete="username"
+              />
+            </div>
+            
+            <div class="form-group">
+              <label for="login-password">密码</label>
+              <div class="input-wrapper">
+                <input 
+                  type="password" 
+                  id="login-password" 
+                  class="form-input" 
+                  placeholder="请输入密码"
+                  autocomplete="current-password"
+                />
+                <button type="button" class="password-toggle" id="password-toggle">
+                  <span class="eye-icon">👁</span>
+                </button>
+              </div>
+            </div>
+            
+            <button type="submit" class="btn btn-primary btn-modal">进入梦境</button>
+            <button type="button" class="btn-link" id="btn-register">没有账号？去注册</button>
+          </form>
+        </div>
+        </div>
+
+        <!-- 设置页面（模态框） -->
+        <div class="modal-overlay" id="page-settings">
+        <div class="modal-container settings-modal">
+          <button class="modal-close" id="settings-close">&times;</button>
+          <h2 class="modal-title">秘境设置</h2>
+          
+          <div class="settings-content">
+            <div class="setting-item">
+              <label class="setting-label">背景音乐</label>
+              <div class="setting-control">
+                <input 
+                  type="range" 
+                  class="slider" 
+                  id="setting-music" 
+                  min="0" 
+                  max="100" 
+                  value="50"
+                />
+                <span class="setting-value" id="music-value">50%</span>
+              </div>
+            </div>
+            
+            <div class="setting-item">
+              <label class="setting-label">灵敏度</label>
+              <div class="setting-control">
+                <input 
+                  type="range" 
+                  class="slider" 
+                  id="setting-sensitivity" 
+                  min="0" 
+                  max="100" 
+                  value="70"
+                />
+                <span class="setting-value" id="sensitivity-value">70%</span>
+              </div>
+            </div>
+            
+            <div class="setting-item">
+              <label class="setting-label">鼠标辅助模式</label>
+              <div class="setting-control">
+                <label class="toggle-switch">
+                  <input type="checkbox" id="setting-auxiliary" checked />
+                  <span class="toggle-slider"></span>
+                </label>
+              </div>
+            </div>
+          </div>
+          
+          <button class="btn btn-outline btn-reset" id="btn-reset">返回主殿</button>
+        </div>
+        </div>
+      </div>
+
+      <!-- 藏阁页面（网格布局） -->
+      <div class="gallery-page" id="page-gallery">
+        <div class="gallery-header">
+          <h2 class="gallery-title">我的藏阁</h2>
+          <button class="btn btn-outline btn-return" id="gallery-return">返回</button>
+        </div>
+        
+        <div class="gallery-grid">
+          <div class="gallery-card">
+            <div class="card-image">
+              <img src="/tang.png" alt="唐代斗拱" />
+            </div>
+            <div class="card-content">
+              <h3 class="card-title">唐代斗拱</h3>
+              <p class="card-subtitle">雄大豪迈,用材硕大</p>
+            </div>
+          </div>
+          
+          <div class="gallery-card">
+            <div class="card-image">
+              <img src="/song.png" alt="宋式铺作" />
+            </div>
+            <div class="card-content">
+              <h3 class="card-title">宋式铺作</h3>
+              <p class="card-subtitle">规范严谨,形式多样</p>
+            </div>
+          </div>
+          
+          <div class="gallery-card">
+            <div class="card-image">
+              <img src="/mingqing.png" alt="明清斗科" />
+            </div>
+            <div class="card-content">
+              <h3 class="card-title">明清斗科</h3>
+              <p class="card-subtitle">装饰繁复,构件细小</p>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <script type="module" src="/src/main.js"></script>
+  </body>
+</html>
