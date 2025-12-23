@@ -1,4 +1,4 @@
-import * as THREE from "https://cdn.jsdelivr.net/npm/three@0.152.2/build/three.module.js";
+import * as THREE from "three";
 import { OrbitControls } from "three/examples/jsm/controls/OrbitControls.js";
 import { GLTFLoader } from "three/examples/jsm/loaders/GLTFLoader.js";
 
@@ -36,6 +36,15 @@ export class SceneManager {
     // 创建场景
     this.scene = new THREE.Scene();
     
+    // ✅ 修复：先设置默认背景，然后尝试加载背景图
+    // 这样即使图片加载失败，场景也有背景显示
+    this.scene.background = new THREE.Color(this.backgroundColor);
+    
+    // 添加 Fog（雾）效果
+    const fogColor = new THREE.Color(0x1a1a1a);
+    this.scene.fog = new THREE.Fog(fogColor, 10, 50);
+    this.scene.fog.density = 0.02;
+    
     // ✅ 加载游戏场景背景纹理（照片级融合）
     const textureLoader = new THREE.TextureLoader();
     textureLoader.load(
@@ -44,22 +53,13 @@ export class SceneManager {
         // 设置正确的颜色空间，防止颜色泛白
         texture.colorSpace = THREE.SRGBColorSpace;
         this.scene.background = texture;
-        console.log('[SceneManager] 游戏场景背景图已加载');
-        
-        // 基于背景图创建暗色调 Fog（雾），让远处物体自然隐入背景
-        const fogColor = new THREE.Color(0x1a1a1a); // 暗色调
-        this.scene.fog = new THREE.Fog(fogColor, 10, 50);
-        this.scene.fog.density = 0.02;
+        console.log('[SceneManager] ✅ 游戏场景背景图已加载');
       },
       undefined,
       (error) => {
-        // 加载失败，使用备用纯色背景
-        console.warn('[SceneManager] 游戏场景背景图加载失败，使用纯色背景:', error);
-        this.scene.background = new THREE.Color(this.backgroundColor);
-        // 即使没有背景图，也添加 Fog
-        const fogColor = new THREE.Color(this.backgroundColor);
-        this.scene.fog = new THREE.Fog(fogColor, 10, 50);
-        this.scene.fog.density = 0.02;
+        // 加载失败，继续使用默认纯色背景（已经在上面设置了）
+        console.warn('[SceneManager] ⚠️ 游戏场景背景图加载失败，使用默认背景:', error);
+        console.log('[SceneManager] 提示：请确保 public/background-game.jpg 文件存在');
       }
     );
 

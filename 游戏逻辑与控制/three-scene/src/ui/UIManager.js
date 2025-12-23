@@ -9,7 +9,14 @@ export class UIManager {
     this.uiContainerElement = null;
     this.hudCache = { phase: "", input: "", grab: "" };
     this.sceneManager = sceneManager; // 保存 sceneManager 引用，用于控制渲染器交互
-    this.init();
+    
+    // ✅ 修复：确保DOM完全加载后再初始化
+    if (document.readyState === 'loading') {
+      document.addEventListener('DOMContentLoaded', () => this.init());
+    } else {
+      // DOM已经加载完成，延迟一点确保所有元素都已渲染
+      setTimeout(() => this.init(), 100);
+    }
   }
 
   /**
@@ -53,12 +60,29 @@ export class UIManager {
     // ✅ 修复：绑定游戏HUD的退出按钮
     this.setupGameHUDEvents();
     
-    // ✅ 调试：检查主菜单元素
+    // ✅ 调试：检查主菜单元素和按钮
+    const btnStart = document.getElementById("btn-start");
+    const btnCollection = document.getElementById("btn-collection");
+    const btnLogin = document.getElementById("btn-login");
+    const btnSettings = document.getElementById("btn-settings");
     console.log("[UIManager] 初始化完成:", {
       mainMenuElement: !!this.mainMenuElement,
       uiContainerElement: !!this.uiContainerElement,
       sceneManager: !!this.sceneManager,
+      btnStart: !!btnStart,
+      btnCollection: !!btnCollection,
+      btnLogin: !!btnLogin,
+      btnSettings: !!btnSettings,
+      readyState: document.readyState,
     });
+    
+    // ✅ 修复：如果按钮还没找到，延迟重试绑定
+    if (!btnStart || !btnCollection || !btnLogin || !btnSettings) {
+      console.warn("[UIManager] ⚠️ 部分按钮未找到，将在500ms后重试绑定");
+      setTimeout(() => {
+        this.setupMainMenuEvents();
+      }, 500);
+    }
 
     // 创建本地摄像头 overlay（延迟创建）
     this._createCameraOverlay();
@@ -134,43 +158,53 @@ export class UIManager {
         this.setHandOverlayPosition(x, y, false);
       });
 
-      // 找到 HUD 的按钮并绑定事件
+      // ✅ 修复：找到 HUD 的按钮并绑定事件（参考视觉部分.html，手动启动摄像头）
       const btnCam = document.getElementById('btn-open-camera');
       const btnFollow = document.getElementById('btn-toggle-hand-follow');
       if (btnCam) {
         btnCam.addEventListener('click', async () => {
-          if (this._cameraContainer.style.display === 'none') {
+          // ✅ 修复：启动 HandInput 的手势识别（参考视觉部分.html 的 startCamera）
+          if (!this._handInputStarted) {
             try {
-              const stream = await navigator.mediaDevices.getUserMedia({ video: true });
-              this._cameraVideo.srcObject = stream;
-              this._cameraContainer.style.display = 'block';
-              // 打开摄像头时同时显示手势 overlay（若存在）
-              try { if (this._handOverlay) this._handOverlay.style.display = 'block'; } catch (e) {}
-              // 通知外部：本地摄像头已打开（用于启动浏览器端 MediaPipe）
-              try { if (this._onLocalCameraToggle) this._onLocalCameraToggle(this._cameraVideo, true); } catch (e) {}
-              // 显示 center 提示为本地摄像头已启用（不代表手势识别已接入）
               const center = document.getElementById('hud-center-status');
               if (center) {
                 const span = center.querySelector('.center-status-text');
-                if (span) span.textContent = '本地摄像头已启用（未接入手势服务）';
+                if (span) span.textContent = '🔄 正在启动摄像头...';
+              }
+              
+              // 通知外部启动 HandInput（通过回调）
+              if (this._onStartHandInput) {
+                await this._onStartHandInput();
+                this._handInputStarted = true;
+                btnCam.textContent = '关闭摄像头';
+                
+                if (center) {
+                  const span = center.querySelector('.center-status-text');
+                  if (span) span.textContent = '✅ 手势识别已连接（浏览器端 MediaPipe）';
+                }
+              } else {
+                console.warn('[UIManager] 未设置 onStartHandInput 回调');
               }
             } catch (e) {
-              console.error('[UIManager] 无法打开摄像头:', e);
+              console.error('[UIManager] 启动手势识别失败:', e);
+              const center = document.getElementById('hud-center-status');
+              if (center) {
+                const span = center.querySelector('.center-status-text');
+                if (span) span.textContent = '❌ 摄像头启动失败，请检查权限或使用鼠标模式';
+              }
             }
           } else {
-            // 关闭摄像头
-            try {
-              const s = this._cameraVideo.srcObject;
-              if (s && s.getTracks) s.getTracks().forEach(t => t.stop());
-            } catch (e) {}
-            this._cameraVideo.srcObject = null;
-            this._cameraContainer.style.display = 'none';
-            this._handOverlay.style.display = 'none';
-            try { if (this._onLocalCameraToggle) this._onLocalCameraToggle(this._cameraVideo, false); } catch (e) {}
-            const center = document.getElementById('hud-center-status');
-            if (center) {
-              const span = center.querySelector('.center-status-text');
-              if (span) span.textContent = '手势未连接 - 使用模拟器或鼠标模式';
+            // 关闭手势识别
+            if (this._onStopHandInput) {
+              this._onStopHandInput();
+              this._handInputStarted = false;
+              btnCam.textContent = '打开摄像头';
+              
+              const center = document.getElementById('hud-center-status');
+              if (center) {
+                const span = center.querySelector('.center-status-text');
+                if (span) span.textContent = '手势未连接 - 使用鼠标模式';
+              }
             }
           }
         }, false);
@@ -191,6 +225,20 @@ export class UIManager {
    */
   onLocalCameraToggle(callback) {
     this._onLocalCameraToggle = callback;
+  }
+
+  /**
+   * ✅ 修复：注册 HandInput 启动/停止回调（参考视觉部分.html）
+   */
+  onStartHandInput(callback) {
+    this._onStartHandInput = callback;
+  }
+
+  /**
+   * ✅ 修复：注册 HandInput 停止回调
+   */
+  onStopHandInput(callback) {
+    this._onStopHandInput = callback;
   }
 
   /**
@@ -267,12 +315,6 @@ export class UIManager {
    * 设置主菜单按钮事件
    */
   setupMainMenuEvents() {
-    // ✅ 修复：延迟执行，确保DOM完全加载
-    if (document.readyState === 'loading') {
-      document.addEventListener('DOMContentLoaded', () => this.setupMainMenuEvents());
-      return;
-    }
-    
     const btnStart = document.getElementById("btn-start");
     const btnCollection = document.getElementById("btn-collection");
     const btnLogin = document.getElementById("btn-login");
@@ -328,17 +370,38 @@ export class UIManager {
       console.log("[UIManager] ✅ 开始筑梦按钮事件已绑定（多种方式）");
     } else {
       console.error("[UIManager] ❌ 未找到 btn-start 按钮！");
+      // ✅ 修复：延迟重试绑定
+      setTimeout(() => {
+        const retryBtn = document.getElementById("btn-start");
+        if (retryBtn) {
+          const handleStartClick = (e) => {
+            e.preventDefault();
+            e.stopPropagation();
+            console.log("[UIManager] ✅ 开始筑梦按钮被点击（延迟绑定）！");
+            this.hideMainMenu();
+            if (this.onStartGameCallback) {
+              this.onStartGameCallback();
+            }
+            return false;
+          };
+          retryBtn.addEventListener("click", handleStartClick, true);
+          retryBtn.addEventListener("click", handleStartClick, false);
+          retryBtn.onclick = handleStartClick;
+          console.log("[UIManager] ✅ 开始筑梦按钮事件已绑定（延迟重试成功）");
+        }
+      }, 500);
     }
 
-    // 备用全局捕获：如果 UI 按钮被覆盖或事件被阻断，监听 document 指针事件并触发按钮
-    if (!btnStart) {
-      document.addEventListener('pointerdown', (e) => {
-        const el = document.elementFromPoint(e.clientX, e.clientY);
-        if (el && el.id === 'btn-start') {
-          el.click();
+    // ✅ 修复：备用全局捕获（即使按钮找到也添加，作为双重保险）
+    document.addEventListener('pointerdown', (e) => {
+      const el = document.elementFromPoint(e.clientX, e.clientY);
+      if (el && (el.id === 'btn-start' || el.closest('#btn-start'))) {
+        const btn = el.id === 'btn-start' ? el : el.closest('#btn-start');
+        if (btn && btn.onclick) {
+          btn.onclick(e);
         }
-      }, { capture: true });
-    }
+      }
+    }, { capture: true });
 
     if (btnCollection) {
       const handleCollectionClick = (e) => {
@@ -437,27 +500,38 @@ export class UIManager {
         e.preventDefault();
         e.stopPropagation();
         console.log("[UIManager] ✅ 藏阁返回按钮被点击");
-        
-        // #region agent log
-        fetch('http://127.0.0.1:7242/ingest/aa6999dc-f03f-450f-a3b9-6dcf420c0b8f',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'UIManager.js:189',message:'gallery-return clicked',data:{},timestamp:Date.now(),sessionId:'debug-session',runId:'run1',hypothesisId:'H5'})}).catch(()=>{});
-        // #endregion
-        
         this.hideGallery();
+        return false;
       };
+      // ✅ 修复：使用多种方式确保事件能触发
       galleryReturn.addEventListener("click", handleGalleryReturn, true);
       galleryReturn.addEventListener("click", handleGalleryReturn, false);
       galleryReturn.onclick = handleGalleryReturn;
-      console.log("[UIManager] ✅ 藏阁返回按钮事件已绑定");
-      
-      // #region agent log
-      fetch('http://127.0.0.1:7242/ingest/aa6999dc-f03f-450f-a3b9-6dcf420c0b8f',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'UIManager.js:195',message:'gallery-return bound',data:{galleryReturnFound:true},timestamp:Date.now(),sessionId:'debug-session',runId:'run1',hypothesisId:'H5'})}).catch(()=>{});
-      // #endregion
+      // 也支持 mousedown（更早触发）
+      galleryReturn.addEventListener("mousedown", (e) => {
+        e.preventDefault();
+        console.log("[UIManager] ✅ 藏阁返回按钮 mousedown 事件触发");
+      });
+      console.log("[UIManager] ✅ 藏阁返回按钮事件已绑定（多种方式）");
     } else {
       console.error("[UIManager] ❌ 未找到 gallery-return 按钮！");
-      
-      // #region agent log
-      fetch('http://127.0.0.1:7242/ingest/aa6999dc-f03f-450f-a3b9-6dcf420c0b8f',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'UIManager.js:197',message:'gallery-return not found',data:{galleryReturnFound:false},timestamp:Date.now(),sessionId:'debug-session',runId:'run1',hypothesisId:'H5'})}).catch(()=>{});
-      // #endregion
+      // ✅ 修复：延迟重试绑定（DOM 可能还未完全加载）
+      setTimeout(() => {
+        const retryBtn = document.getElementById("gallery-return");
+        if (retryBtn) {
+          const handleGalleryReturn = (e) => {
+            e.preventDefault();
+            e.stopPropagation();
+            console.log("[UIManager] ✅ 藏阁返回按钮被点击（延迟绑定）");
+            this.hideGallery();
+            return false;
+          };
+          retryBtn.addEventListener("click", handleGalleryReturn, true);
+          retryBtn.addEventListener("click", handleGalleryReturn, false);
+          retryBtn.onclick = handleGalleryReturn;
+          console.log("[UIManager] ✅ 藏阁返回按钮事件已绑定（延迟重试成功）");
+        }
+      }, 500);
     }
 
     // 点击遮罩层关闭模态框

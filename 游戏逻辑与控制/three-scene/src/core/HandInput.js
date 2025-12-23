@@ -1,293 +1,303 @@
-import * as THREE from "https://cdn.jsdelivr.net/npm/three@0.152.2/build/three.module.js";
-
 /**
- * HandInput - 手势输入处理模块（重写版）
- * 职责：WebSocket 通信、手势数据平滑处理、坐标转换
+ * HandInput - MVP 版本
+ * 基于浏览器端 MediaPipe Hands 的简化手势输入模块
+ * 
+ * 功能：启动摄像头，获取手部数据
+ * 输出：{ x, y, isPinching }
  */
+
 export class HandInput {
-  constructor(config = {}) {
-    // 配置参数
-    this.wsUrl = config.wsUrl ?? "ws://localhost:12345";
-    this.wsRetryMs = config.wsRetryMs ?? 2000;  // 重连间隔（毫秒）
-    this.gestureHz = config.gestureHz ?? 30;     // 手势更新频率
-    this.smoothAlpha = config.smoothAlpha ?? 0.4; // 平滑系数（0~1，越大越跟手）
-    this.staleMs = config.staleMs ?? 500;        // 手离开后自动松手的延迟时间
-
-    // WebSocket 连接状态
-    this.connected = false;
-    this.socket = null;
-    this.reconnectTimer = null;
-    this._hasLoggedDisconnect = false;
-
-    // 是否允许本地输入（例如鼠标模式下仍分发 update）
-    this.allowLocalInput = config.allowLocalInput ?? false;
-
-    // 手势状态
-    this.gesture = {
-      // 原始坐标（服务器发送的 0-1 范围）
-      raw: new THREE.Vector2(0.5, 0.5),
-      // NDC 坐标（-1 到 1，用于 Three.js）
-      ndc: new THREE.Vector2(0, 0),
-
-      // 抓取状态
-      holding: false,
-      prevHolding: false,
-      edgeGrab: false,      // 抓取边沿（open→fist）
-      edgeRelease: false,   // 释放边沿（fist→open）
-
-      // 消息时间戳
-      lastMsgAt: 0,
-      lastAcceptedAt: 0,
+  constructor() {
+    this.hands = null;
+    this.camera = null;
+    this.videoElement = null;
+    this.rafId = null;
+    
+    // 当前手势数据
+    this.currentGesture = {
+      x: 0.5, // 屏幕中心
+      y: 0.5,
+      isPinching: false,
+      isOpen: false, // 是否张开手掌
     };
-
-    // 回调函数
-    this.onGestureCallback = null;
+    
+    // 平滑处理
+    this.smoothX = 0.5;
+    this.smoothY = 0.5;
+    this.smoothAlpha = 0.15; // 平滑系数（越小越平滑，但延迟越大）
+    
+    this.isInitialized = false;
+    this.isRunning = false;
+    
+    // 等待 MediaPipe 加载
+    this.waitForMediaPipeAndInit();
   }
 
   /**
-   * 初始化 WebSocket 连接
+   * 等待 MediaPipe 全局对象加载完成
    */
-  init() {
-    this.connect();
+  waitForMediaPipeAndInit() {
+    if (typeof Hands !== 'undefined') {
+      this.init();
+    } else {
+      const checkInterval = setInterval(() => {
+        if (typeof Hands !== 'undefined') {
+          clearInterval(checkInterval);
+          this.init();
+        }
+      }, 100);
+      
+      // 10秒后超时
+      setTimeout(() => {
+        clearInterval(checkInterval);
+        if (!this.isInitialized) {
+          console.warn('[HandInput] MediaPipe Hands 未在 10 秒内加载');
+        }
+      }, 10000);
+    }
   }
 
   /**
-   * 连接 WebSocket
+   * 初始化 MediaPipe Hands
    */
-  connect() {
-    // 如果已有连接，先关闭
-    if (this.socket) {
-      this.socket.close();
-      this.socket = null;
-    }
-
-    // 清除重连定时器
-    if (this.reconnectTimer) {
-      clearTimeout(this.reconnectTimer);
-      this.reconnectTimer = null;
-    }
-
-    try {
-      console.log(`[HandInput] 正在连接 WebSocket: ${this.wsUrl}`);
-      this.socket = new WebSocket(this.wsUrl);
-    } catch (e) {
-      console.error("[HandInput] WebSocket 初始化失败", e);
-      this.scheduleReconnect();
+  async init() {
+    if (this.isInitialized) return;
+    
+    if (typeof Hands === 'undefined') {
+      console.error('[HandInput] MediaPipe Hands 未加载');
       return;
     }
 
-    this.socket.onopen = () => {
-      this.connected = true;
-      this._hasLoggedDisconnect = false;
-      console.log("[HandInput] ✅ WebSocket 已连接，手势识别已启用");
-      if (this.onGestureCallback) {
-        this.onGestureCallback({ type: "connected" });
-      }
-    };
-
-    this.socket.onclose = (event) => {
-      this.connected = false;
-      this.socket = null;
-      
-      // 只在第一次断开时显示详细提示
-      if (!this._hasLoggedDisconnect) {
-        console.warn("[HandInput] ⚠️  WebSocket 连接失败（手势识别服务器未运行）");
-        console.warn("[HandInput] 💡 提示：如需使用手势识别，请启动手势识别服务器：");
-        console.warn("[HandInput]    1. 打开终端，进入：游戏逻辑与控制/three-scene/手势识别服务器");
-        console.warn("[HandInput]    2. 运行：python server.py");
-        console.warn("[HandInput]    3. 或双击：启动服务器.bat（Windows）");
-        console.warn("[HandInput] ✅ 当前使用鼠标模式，功能正常");
-        console.warn("[HandInput] 🔄 将在后台静默重连...");
-        this._hasLoggedDisconnect = true;
-      }
-      
-      if (this.onGestureCallback) {
-        this.onGestureCallback({ type: "disconnected" });
-      }
-      
-      this.scheduleReconnect();
-    };
-
-    this.socket.onerror = (error) => {
-      // 错误处理由 onclose 完成
-      console.error("[HandInput] WebSocket 错误:", error);
-    };
-
-    this.socket.onmessage = async (event) => {
-      // 节流：避免太高频
-      const now = performance.now();
-      const minInterval = 1000 / this.gestureHz;
-      if (now - this.gesture.lastAcceptedAt < minInterval) {
-        return;
-      }
-      this.gesture.lastAcceptedAt = now;
-
-      // 解析消息
-      let text = event.data;
-      if (text instanceof Blob) {
-        text = await text.text();
-      }
-
-      let data;
-      try {
-        data = JSON.parse(text);
-      } catch (e) {
-        console.warn("[HandInput] 无法解析消息:", e);
-        return;
-      }
-
-      // 检查是否有错误
-      if (data.error) {
-        console.error(`[HandInput] 服务器错误: ${data.message || data.error}`);
-        return;
-      }
-
-      this.gesture.lastMsgAt = now;
-      // 调试：打印接收到的原始数据，便于在浏览器控制台验证
-      try {
-        console.log("[HandInput] 收到消息:", data);
-      } catch (e) {}
-      this.applyGestureInput(data);
-    };
-  }
-
-  /**
-   * 安排重连
-   */
-  scheduleReconnect() {
-    if (this.reconnectTimer) {
-      return; // 已有重连计划
-    }
-    
-    this.reconnectTimer = setTimeout(() => {
-      this.reconnectTimer = null;
-      if (!this.connected) {
-        this.connect();
-      }
-    }, this.wsRetryMs);
-  }
-
-  /**
-   * 应用手势输入数据
-   * @param {Object} g - 手势数据 { gesture, x, y }
-   * 注意：x, y 是 0-1 范围的归一化坐标，需要转换为 NDC (-1 到 1)
-   */
-  applyGestureInput(g) {
-    if (!g || g.gesture === undefined) return;
-
-    // 更新最后消息时间（用于 stale 检测）
-    this.gesture.lastMsgAt = performance.now();
-
-    // ✅ 修复：将服务器发送的 0-1 坐标转换为 NDC 坐标 (-1 到 1)
-    // 服务器发送：x, y 在 0-1 范围
-    // Three.js 需要：NDC 坐标在 -1 到 1 范围
-    const rx = this.clamp(g.x, 0, 1) * 2 - 1;  // 0-1 -> -1 到 1
-    // 修正：正确的 Y 映射为 ndcY = 1 - 2*y （0 -> 1, 1 -> -1）
-    const ry = 1 - 2 * this.clamp(g.y, 0, 1);  // 0-1 -> 1 到 -1（Y轴翻转）
-    
-    this.gesture.raw.set(rx, ry);
-    
-    // 平滑插值
-    this.gesture.ndc.lerp(this.gesture.raw, this.smoothAlpha);
-
-    // 更新 holding 状态与边沿检测
-    const holdingNow = g.gesture === "fist" ? true : 
-                      g.gesture === "open" ? false : 
-                      this.gesture.holding;
-    
-    this.gesture.prevHolding = this.gesture.holding;
-    this.gesture.holding = holdingNow;
-
-    // 检测边沿（状态变化）
-    this.gesture.edgeGrab = !this.gesture.prevHolding && this.gesture.holding;
-    this.gesture.edgeRelease = this.gesture.prevHolding && !this.gesture.holding;
-
-    // 通知外部更新：仅在已连接或允许本地输入时分发
-    if (this.onGestureCallback && (this.connected || this.allowLocalInput)) {
-      this.onGestureCallback({ 
-        type: "update", 
-        gesture: { ...this.gesture }  // 传递副本
-      });
-    }
-
-    // 调试：打印映射后的 NDC 坐标和手势状态（便于确认坐标方向与抓取/释放）
     try {
-      console.log(`[HandInput] gesture=${g.gesture} raw=(${Number(g.x).toFixed(3)},${Number(g.y).toFixed(3)}) ndc=(${this.gesture.ndc.x.toFixed(3)},${this.gesture.ndc.y.toFixed(3)}) holding=${this.gesture.holding}`);
-    } catch (e) {}
-  }
+      // 创建隐藏的 video 元素
+      this.videoElement = document.createElement('video');
+      this.videoElement.width = 640;
+      this.videoElement.height = 480;
+      this.videoElement.autoplay = true;
+      this.videoElement.playsInline = true;
+      this.videoElement.style.position = 'fixed';
+      this.videoElement.style.top = '-9999px';
+      this.videoElement.style.left = '-9999px';
+      this.videoElement.style.opacity = '0';
+      this.videoElement.style.pointerEvents = 'none';
+      document.body.appendChild(this.videoElement);
 
-  /**
-   * 每帧更新（处理超时、状态重置等）
-   * @param {number} deltaTime - 帧时间差（秒）
-   */
-  update(deltaTime) {
-    // 如果既未连接也不允许本地输入，则跳过更新
-    if (!this.connected && !this.allowLocalInput) return;
-
-    const now = performance.now();
-
-    // 超时保护：手离开/断帧 → 自动松手
-    if (now - this.gesture.lastMsgAt > this.staleMs) {
-      if (this.gesture.holding) {
-        this.gesture.prevHolding = true;
-        this.gesture.holding = false;
-        this.gesture.edgeRelease = true;
-        
-        // 通知释放
-        if (this.onGestureCallback) {
-          this.onGestureCallback({ 
-            type: "update", 
-            gesture: { ...this.gesture }
-          });
+      // 初始化 MediaPipe Hands
+      this.hands = new Hands({
+        locateFile: (file) => {
+          return `https://cdn.jsdelivr.net/npm/@mediapipe/hands/${file}`;
         }
-      }
+      });
+
+      this.hands.setOptions({
+        maxNumHands: 1,
+        modelComplexity: 1,
+        minDetectionConfidence: 0.5,
+        minTrackingConfidence: 0.5,
+      });
+
+      // 设置结果回调
+      this.hands.onResults((results) => {
+        this.onResults(results);
+      });
+
+      this.isInitialized = true;
+      console.log('[HandInput] ✅ MediaPipe Hands 已初始化');
+    } catch (error) {
+      console.error('[HandInput] 初始化失败:', error);
     }
   }
 
   /**
-   * 设置手势更新回调
-   * @param {Function} callback - 回调函数
+   * 处理 MediaPipe 识别结果
    */
-  onGesture(callback) {
-    this.onGestureCallback = callback;
+  onResults(results) {
+    if (!results || !results.multiHandLandmarks || results.multiHandLandmarks.length === 0) {
+      // 没有检测到手，保持当前位置
+      this.currentGesture.isOpen = false;
+      return;
+    }
+
+    // 使用第一只手的关节点
+    const landmarks = results.multiHandLandmarks[0];
+    
+    // 关键点索引
+    const WRIST = 0;
+    const THUMB_TIP = 4;
+    const THUMB_IP = 3;
+    const INDEX_TIP = 8;
+    const INDEX_PIP = 6;
+    const MIDDLE_TIP = 12;
+    const MIDDLE_PIP = 10;
+    const RING_TIP = 16;
+    const RING_PIP = 14;
+    const PINKY_TIP = 20;
+    const PINKY_PIP = 18;
+    
+    // 获取手腕位置（归一化坐标 0-1）
+    const wrist = landmarks[WRIST];
+    
+    // ✅ 修复：添加平滑处理
+    this.smoothX += (wrist.x - this.smoothX) * this.smoothAlpha;
+    this.smoothY += (wrist.y - this.smoothY) * this.smoothAlpha;
+    
+    this.currentGesture.x = this.smoothX;
+    this.currentGesture.y = this.smoothY;
+    
+    // 判断是否捏合：计算拇指和食指的距离
+    const thumbTip = landmarks[THUMB_TIP];
+    const indexTip = landmarks[INDEX_TIP];
+    
+    const dx = thumbTip.x - indexTip.x;
+    const dy = thumbTip.y - indexTip.y;
+    const dz = (thumbTip.z || 0) - (indexTip.z || 0);
+    const distance = Math.sqrt(dx * dx + dy * dy + dz * dz);
+    
+    this.currentGesture.isPinching = distance < 0.05;
+    
+    // ✅ 新增：判断是否张开手掌（用于旋转功能）
+    // 检查所有手指是否伸直
+    const isFingerExtended = (tip, pip) => tip.y < pip.y;
+    const thumbExtended = thumbTip.x > landmarks[THUMB_IP].x;
+    const indexExtended = isFingerExtended(indexTip, landmarks[INDEX_PIP]);
+    const middleExtended = isFingerExtended(landmarks[MIDDLE_TIP], landmarks[MIDDLE_PIP]);
+    const ringExtended = isFingerExtended(landmarks[RING_TIP], landmarks[RING_PIP]);
+    const pinkyExtended = isFingerExtended(landmarks[PINKY_TIP], landmarks[PINKY_PIP]);
+    
+    const extendedCount = [thumbExtended, indexExtended, middleExtended, ringExtended, pinkyExtended]
+      .filter(Boolean).length;
+    
+    // 张开手掌：至少4个手指伸直，且不是捏合状态
+    this.currentGesture.isOpen = extendedCount >= 4 && !this.currentGesture.isPinching;
   }
 
   /**
-   * 获取当前手势状态
+   * 启动摄像头
    */
-  getCurrentGesture() {
-    return {
-      ...this.gesture,
-      connected: this.connected
-    };
+  async start() {
+    if (!this.isInitialized) {
+      await this.init();
+    }
+
+    if (this.isRunning) {
+      console.warn('[HandInput] 摄像头已在运行');
+      return;
+    }
+
+    try {
+      // 优先使用 MediaPipe Camera
+      if (typeof Camera !== 'undefined') {
+        this.camera = new Camera(this.videoElement, {
+          onFrame: async () => {
+            if (this.hands && this.isRunning) {
+              try {
+                await this.hands.send({ image: this.videoElement });
+              } catch (e) {
+                console.debug('[HandInput] hands.send 错误', e);
+              }
+            }
+          },
+          width: 640,
+          height: 480,
+        });
+
+        await this.camera.start();
+        this.isRunning = true;
+        console.log('[HandInput] ✅ 摄像头已启动（MediaPipe Camera）');
+      } else {
+        // Fallback: 使用 getUserMedia
+        if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) {
+          throw new Error('浏览器不支持 navigator.mediaDevices.getUserMedia');
+        }
+
+        const stream = await navigator.mediaDevices.getUserMedia({
+          video: { width: 640, height: 480 }
+        });
+
+        this.videoElement.srcObject = stream;
+        await this.videoElement.play();
+
+        // 创建 RAF 循环发送帧
+        let rafId = null;
+        const step = async () => {
+          if (this.hands && this.isRunning) {
+            try {
+              await this.hands.send({ image: this.videoElement });
+            } catch (e) {
+              console.debug('[HandInput] hands.send 错误', e);
+            }
+          }
+          if (this.isRunning) {
+            rafId = requestAnimationFrame(step);
+            this.rafId = rafId;
+          }
+        };
+        step();
+
+        // 提供统一的 stop 接口
+        const originalStream = stream;
+        this.camera = {
+          stop: () => {
+            if (rafId) cancelAnimationFrame(rafId);
+            try {
+              const tracks = originalStream.getTracks();
+              tracks.forEach(t => t.stop());
+            } catch (e) {}
+          }
+        };
+
+        this.isRunning = true;
+        console.log('[HandInput] ✅ 摄像头已启动（getUserMedia fallback）');
+      }
+    } catch (error) {
+      console.error('[HandInput] ❌ 摄像头启动失败:', error);
+      this.isRunning = false;
+      throw error;
+    }
   }
 
   /**
-   * 检查是否已连接
+   * 停止摄像头
+   */
+  stop() {
+    if (!this.isRunning) return;
+
+    try {
+      if (this.camera && typeof this.camera.stop === 'function') {
+        this.camera.stop();
+      } else if (this.videoElement && this.videoElement.srcObject) {
+        const stream = this.videoElement.srcObject;
+        if (stream && stream.getTracks) {
+          stream.getTracks().forEach(t => t.stop());
+        }
+        this.videoElement.srcObject = null;
+      }
+
+      if (this.rafId) {
+        cancelAnimationFrame(this.rafId);
+        this.rafId = null;
+      }
+    } catch (e) {
+      console.warn('[HandInput] 停止摄像头时出现错误', e);
+    }
+
+    this.camera = null;
+    this.isRunning = false;
+    console.log('[HandInput] 摄像头已停止');
+  }
+
+  /**
+   * 获取当前手势数据
+   * @returns {Object} { x, y, isPinching }
+   */
+  getGesture() {
+    return { ...this.currentGesture };
+  }
+
+  /**
+   * 检查是否正在运行
    */
   isConnected() {
-    return this.connected;
-  }
-
-  /**
-   * 断开连接
-   */
-  disconnect() {
-    if (this.socket) {
-      this.socket.close();
-      this.socket = null;
-    }
-    if (this.reconnectTimer) {
-      clearTimeout(this.reconnectTimer);
-      this.reconnectTimer = null;
-    }
-    this.connected = false;
-  }
-
-  /**
-   * 工具函数：限制值在范围内
-   */
-  clamp(v, min, max) {
-    return Math.max(min, Math.min(max, v));
+    return this.isRunning;
   }
 }
