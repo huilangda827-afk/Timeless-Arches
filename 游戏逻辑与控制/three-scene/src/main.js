@@ -1,224 +1,151 @@
 /**
- * MVP 版本 - 手势控制验证场景
+ * 斗拱拼装游戏 - 主入口文件
  * 
- * 场景：大斗.glb（基座）+ 蓝色球、黄色立方体、紫色柱子（拼装物品）+ 绿色小球（光标）
- * 交互：捏合手势抓取物品，移动到基座上方自动吸附
+ * 功能：
+ * - 加载背景环境和幽灵参照物
+ * - 解析目标位置（从幽灵组件）
+ * - 加载玩家可交互组件
+ * - 实现手势/鼠标拖拽和自动吸附
  */
 
 import * as THREE from "three";
 import { GLTFLoader } from "three/examples/jsm/loaders/GLTFLoader.js";
+import { OrbitControls } from "three/examples/jsm/controls/OrbitControls.js";
 import { HandInput } from "./core/HandInput.js";
 
-// ===================== 场景设置 =====================
-let scene, camera, renderer;
-let baseModel = null; // ✅ 基座模型（大斗.glb）
-let cursorSphere; // 绿色小球（光标）
+// ===================== 全局变量 =====================
+let scene, camera, renderer, controls;
 let handInput;
-let isGrabbing = false; // 是否正在抓取
-let grabbedObject = null; // 当前抓取的对象（避免频繁切换）
+let gltfLoader = new GLTFLoader();
 
-// ✅ 新增：拼装物品（需要找到并吸附的物品）
-let puzzlePieces = []; // 拼装物品数组：蓝色球、黄色立方体、紫色柱子
-let snapSlots = []; // 吸附位置数组（基座上方，按顺序）
+// 场景对象
+let environmentModel = null; // 背景版.glb
+let ghostModel = null; // 幽灵组件.glb
+let interactivePieces = []; // 玩家可交互的组件数组
+let TARGET_CONFIG = {}; // 目标位置配置字典
 
-// ✅ 新增：平滑处理（让移动更流畅）
+// 手势/拖拽状态
+let cursorSphere; // 绿色小球（虚拟手光标）
+let isGrabbing = false;
+let grabbedObject = null;
 let smoothCursorX = 0;
 let smoothCursorY = 0;
-const cursorSmoothAlpha = 0.2; // 光标平滑系数
+let smoothCursorZ = 0.75; // ✅ 初始化Z轴平滑值（备料架Z=1.5和柱子Z=0之间）
+const cursorSmoothAlpha = 0.2;
 
-// ✅ 新增：吸附参数
-const snapDistance = 0.5; // 吸附距离阈值
+// 吸附参数
+const SNAP_DISTANCE = 2.0; // ✅ 吸附阈值（调整为2.0米，更容易吸附，匹配肉眼判断）
+const SNAP_ANGLE_THRESHOLD = Math.PI / 2; // 角度阈值（90度，更宽松）
 
-// ✅ 新增：音效
-let audioSnap = null; // 拼接音效
-let audioWin = null; // 成功音效
+// 组件列表（需要加载的玩家组件）
+const PIECE_NAMES = ['大斗', '华拱', '正心瓜拱', '散科-左边', '散科-右边'];
 
-// ✅ 新增：模型加载器
-const gltfLoader = new GLTFLoader();
+// 音效
+let audioSnap = null;
+let audioWin = null;
+
+// 停靠区配置（组件初始位置）- 已改为线性排列
+// 实际使用：startX = -4, gap = 2, height = 1.5, depth = 3.0
+const DOCKING_AREA = {
+  startX: -4,    // 起始X位置
+  gap: 2,        // 组件间距
+  height: 1.5,   // 基准高度
+  depth: 3.0     // 前后位置
+};
 
 // ===================== 初始化 =====================
-function init() {
+async function init() {
   // 创建场景
   scene = new THREE.Scene();
   scene.background = new THREE.Color(0x1a1a1a);
 
-  // 创建相机
+  // 创建相机 - 拉近镜头聚焦工作台
   camera = new THREE.PerspectiveCamera(
-    60,
+    50, // ✅ 修改FOV为50，获得更好的透视感（从60改为50）
     window.innerWidth / window.innerHeight,
     0.1,
     100
   );
-  // ✅ 调整相机位置，确保能看到基座和所有物品
-  camera.position.set(0, 2, 8);
-  camera.lookAt(0, -0.5, 0); // 看向基座附近
+  // ✅ 修改相机位置：从右前方俯视，更近的视角
+  const startPos = new THREE.Vector3(6.0, 4.0, 6.0); // 从(10.79, 2.76, 0.42)改为更近
+  camera.position.copy(startPos);
 
   // 创建渲染器
   renderer = new THREE.WebGLRenderer({ antialias: true });
   renderer.setSize(window.innerWidth, window.innerHeight);
   renderer.setPixelRatio(window.devicePixelRatio);
+  renderer.shadowMap.enabled = true;
+  renderer.shadowMap.type = THREE.PCFSoftShadowMap;
   
-  // ✅ 修复：确保渲染器在UI层下方，不遮挡UI
+  // 设置渲染器样式 - 占80%页面高度
   renderer.domElement.style.position = 'fixed';
-  renderer.domElement.style.top = '0';
+  renderer.domElement.style.top = '10%'; // 顶部留10%
   renderer.domElement.style.left = '0';
+  renderer.domElement.style.width = '100%';
+  renderer.domElement.style.height = '80%'; // 占80%高度
   renderer.domElement.style.zIndex = '0';
-  renderer.domElement.style.pointerEvents = 'none'; // 默认不拦截事件（主菜单显示时）
+  renderer.domElement.style.pointerEvents = 'none';
   
   document.body.appendChild(renderer.domElement);
 
+  // 创建轨道控制器
+  controls = new OrbitControls(camera, renderer.domElement);
+  controls.target.set(0, 1.5, 0); // ✅ 修改观察点：盯着红柱子中心（从2.0改为1.5）
+  controls.minDistance = 2;
+  controls.maxDistance = 20;
+  controls.maxPolarAngle = Math.PI / 2; // 防止钻入地底
+  controls.enableDamping = true;
+  controls.dampingFactor = 0.05;
+  controls.enableZoom = true; // ✅ 确保鼠标滚轮缩放启用
+  controls.zoomSpeed = 1.0; // ✅ 缩放速度
+  controls.enablePan = true; // ✅ 允许平移
+  controls.enableRotate = true; // ✅ 允许旋转
+  controls.update(); // 立即更新
+  
+  // ✅ 注意：OrbitControls 会自动处理滚轮事件
+  // 只要 renderer.domElement.style.pointerEvents = 'auto'，滚轮就能正常工作
+
   // 添加光照
-  const ambientLight = new THREE.AmbientLight(0xffffff, 0.6);
+  const ambientLight = new THREE.AmbientLight(0xffffff, 0.8);
   scene.add(ambientLight);
 
-  const directionalLight = new THREE.DirectionalLight(0xffffff, 0.8);
-  directionalLight.position.set(5, 5, 5);
+  const directionalLight = new THREE.DirectionalLight(0xffffff, 1.0);
+  directionalLight.position.set(5, 10, 5);
+  directionalLight.castShadow = true;
+  directionalLight.shadow.mapSize.width = 2048;
+  directionalLight.shadow.mapSize.height = 2048;
+  directionalLight.shadow.camera.near = 0.5;
+  directionalLight.shadow.camera.far = 50;
+  directionalLight.shadow.camera.left = -10;
+  directionalLight.shadow.camera.right = 10;
+  directionalLight.shadow.camera.top = 10;
+  directionalLight.shadow.camera.bottom = -10;
   scene.add(directionalLight);
 
-  // ✅ 加载大斗.glb作为基座（替换红色立方体）
-  console.log('[Main] 开始加载基座模型: /models/大斗.glb');
-  console.log('[Main] GLTFLoader 状态:', gltfLoader ? '已初始化' : '未初始化');
-  
-  gltfLoader.load(
-    '/models/大斗.glb',
-    (gltf) => {
-      console.log('[Main] GLB 文件加载成功，开始处理模型...');
-      const model = gltf.scene;
-      
-      // 计算模型边界框，用于定位
-      const box = new THREE.Box3().setFromObject(model);
-      const size = box.getSize(new THREE.Vector3());
-      const center = box.getCenter(new THREE.Vector3());
-      const min = box.min; // 模型底部Y坐标
-      
-      // 调整模型位置：固定在底部
-      // 将模型的底部对齐到 baseY 位置
-      const baseY = -1.5; // 基座底部Y位置
-      // 计算需要移动的距离：baseY - min.y（将模型底部移动到baseY）
-      model.position.set(0, baseY - min.y, 0);
-      
-      // 启用阴影
-      model.traverse((child) => {
-        if (child.isMesh) {
-          child.castShadow = true;
-          child.receiveShadow = true;
-        }
-      });
-      
-      baseModel = model;
-      baseModel.userData.isBase = true; // 标记为基座
-      baseModel.userData.baseY = baseY; // 保存基座底部Y位置
-      baseModel.userData.baseHeight = size.y; // 保存基座高度
-      scene.add(baseModel);
-      
-      // ✅ 根据实际模型高度更新吸附位置
-      updateSnapSlots(baseY, size.y);
-      
-      console.log('[Main] ✅ 基座模型（大斗.glb）已加载');
-      console.log('[Main] 模型尺寸:', size);
-      console.log('[Main] 模型中心:', center);
-      console.log('[Main] 模型底部(min.y):', min.y);
-      console.log('[Main] 模型位置:', model.position);
-      console.log('[Main] 基座底部Y:', baseY);
-      console.log('[Main] 基座高度:', size.y);
-    },
-    (progress) => {
-      // 加载进度回调
-      if (progress.lengthComputable) {
-        const percentComplete = (progress.loaded / progress.total) * 100;
-        console.log(`[Main] 基座模型加载进度: ${percentComplete.toFixed(1)}%`);
-      }
-    },
-    (error) => {
-      console.error('[Main] ❌ 基座模型加载失败！');
-      console.error('[Main] 错误详情:', error);
-      console.error('[Main] 错误类型:', error?.type);
-      console.error('[Main] 错误消息:', error?.message);
-      console.error('[Main] 错误URL:', error?.url || '/models/大斗.glb');
-      console.warn('[Main] ⚠️ 使用红色立方体作为备用方案');
-      // 备用方案：使用红色立方体
-      const baseGeometry = new THREE.BoxGeometry(0.6, 0.3, 0.6);
-      const baseMaterial = new THREE.MeshStandardMaterial({ color: 0xff0000 });
-      baseModel = new THREE.Mesh(baseGeometry, baseMaterial);
-      const baseY = -1.5;
-      const baseHeight = 0.3;
-      baseModel.position.set(0, baseY, 0);
-      baseModel.userData.isBase = true;
-      baseModel.userData.baseY = baseY;
-      baseModel.userData.baseHeight = baseHeight;
-      scene.add(baseModel);
-      
-      // ✅ 更新吸附位置（使用备用立方体的尺寸）
-      updateSnapSlots(baseY, baseHeight);
-    }
-  );
-
-  // 创建绿色小球（光标）
-  const sphereGeometry = new THREE.SphereGeometry(0.1, 16, 16);
-  const sphereMaterial = new THREE.MeshStandardMaterial({ color: 0x00ff00 });
+  // 创建虚拟手光标（绿色小球）
+  const sphereGeometry = new THREE.SphereGeometry(0.15, 16, 16);
+  const sphereMaterial = new THREE.MeshStandardMaterial({ 
+    color: 0x00ff00,
+    transparent: true,
+    opacity: 0.8, // 稍微透明
+    depthTest: false, // ✅ 关键：禁用深度测试，确保永远渲染在最上层
+    depthWrite: false // ✅ 不写入深度缓冲
+  });
   cursorSphere = new THREE.Mesh(sphereGeometry, sphereMaterial);
-  cursorSphere.position.set(0, 0, 0);
+  cursorSphere.position.set(0, 2, 0.75); // ✅ 初始位置在中间深度（备料架Z=1.5和柱子Z=0之间）
+  cursorSphere.visible = false; // 初始隐藏，手势激活时显示
+  cursorSphere.renderOrder = 999; // ✅ 设置渲染顺序，确保在最上层
   scene.add(cursorSphere);
-
-  // ✅ 创建拼装物品（集中放置在一起，便于拾取）
-  // 1. 蓝色球（最底层，放在基座上方）
-  const blueSphere = new THREE.Mesh(
-    new THREE.SphereGeometry(0.2, 16, 16),
-    new THREE.MeshStandardMaterial({ color: 0x0088ff })
-  );
-  blueSphere.position.set(1.5, 0, 0); // ✅ 集中放置，便于拾取
-  blueSphere.userData.pieceId = 'blue-sphere';
-  blueSphere.userData.originalColor = 0x0088ff;
-  blueSphere.userData.isSnapped = false;
-  scene.add(blueSphere);
-  puzzlePieces.push(blueSphere);
-
-  // 2. 黄色立方体（中间层）
-  const yellowCube = new THREE.Mesh(
-    new THREE.BoxGeometry(0.35, 0.35, 0.35),
-    new THREE.MeshStandardMaterial({ color: 0xffff00 })
-  );
-  yellowCube.position.set(1.5, 0.5, 0); // ✅ 集中放置，在蓝色球上方
-  yellowCube.userData.pieceId = 'yellow-cube';
-  yellowCube.userData.originalColor = 0xffff00;
-  yellowCube.userData.isSnapped = false;
-  scene.add(yellowCube);
-  puzzlePieces.push(yellowCube);
-
-  // 3. 紫色柱子（最顶层）
-  const purpleCylinder = new THREE.Mesh(
-    new THREE.CylinderGeometry(0.15, 0.15, 0.5, 16),
-    new THREE.MeshStandardMaterial({ color: 0xaa00ff })
-  );
-  purpleCylinder.position.set(1.5, 1.0, 0); // ✅ 集中放置，在黄色立方体上方
-  purpleCylinder.userData.pieceId = 'purple-cylinder';
-  purpleCylinder.userData.originalColor = 0xaa00ff;
-  purpleCylinder.userData.isSnapped = false;
-  scene.add(purpleCylinder);
-  puzzlePieces.push(purpleCylinder);
-
-  // ✅ 创建吸附位置（基座上方，按顺序：蓝球、黄立方体、紫柱子）
-  // 注意：如果基座模型加载成功，吸附位置会在模型加载完成后更新
-  // 这里先使用默认值（红色立方体的尺寸），模型加载后会覆盖
-  const defaultBaseY = -1.5; // 默认基座Y位置
-  const defaultBaseHeight = 0.3; // 默认基座高度
-  updateSnapSlots(defaultBaseY, defaultBaseHeight);
 
   // 初始化手势输入
   handInput = new HandInput();
 
-  // 启动摄像头（自动启动）
-  handInput.start().catch((error) => {
-    console.error('[Main] 摄像头启动失败:', error);
-    // 即使摄像头启动失败，也继续运行（可以使用鼠标测试）
-  });
-
-  // ✅ 新增：初始化音效
+  // 初始化音效
   try {
     audioSnap = new Audio('/snap.mp3');
-    audioSnap.volume = 0.6; // 设置音量
+    audioSnap.volume = 0.6;
     audioWin = new Audio('/win (2).mp3');
-    audioWin.volume = 0.7; // 设置音量
+    audioWin.volume = 0.7;
     console.log('[Main] ✅ 音效已加载');
   } catch (error) {
     console.warn('[Main] ⚠️ 音效加载失败:', error);
@@ -227,255 +154,459 @@ function init() {
   // 窗口大小调整
   window.addEventListener('resize', onWindowResize);
 
-  // ✅ 修复：绑定UI按钮事件
+  // 绑定UI事件
   setupUIEvents();
 
-  console.log('[Main] ✅ MVP 场景初始化完成');
-  console.log('[Main] 提示：捏合手势（食指+拇指）可以抓取物品，移动到基座上方自动吸附');
-}
+  // 按顺序加载资源
+  console.log('[Main] 开始加载游戏资源...');
+  await loadEnvironment();
+  await loadGhostReference();
+  await loadInteractivePieces();
 
-// ===================== 更新吸附位置 =====================
-function updateSnapSlots(baseY, baseHeight) {
-  // 清空现有吸附位置
-  snapSlots.length = 0;
+  console.log('[Main] ✅ 游戏初始化完成');
   
-  const pieceSpacing = 0.4; // 物品间距
+  // ✅ 调试：最终对账单 - 验证名称匹配
+  console.log("=== [DEBUG] 最终对账单 - 名称匹配验证 ===");
+  console.log("目标点数量:", Object.keys(TARGET_CONFIG).length);
+  console.log("玩家组件数量:", interactivePieces.length);
+  console.log("\n目标点列表:", Object.keys(TARGET_CONFIG));
+  console.log("玩家组件列表:", interactivePieces.map(p => p.userData.partID));
   
-  // 吸附位置1：蓝色球（基座上方）
-  snapSlots.push({
-    position: new THREE.Vector3(0, baseY + baseHeight / 2 + 0.2, 0),
-    pieceId: 'blue-sphere',
-    isOccupied: false
-  });
+  // 检查匹配情况
+  const missingTargets = interactivePieces.filter(p => !TARGET_CONFIG[p.userData.partID]);
+  const missingPieces = Object.keys(TARGET_CONFIG).filter(key => !interactivePieces.find(p => p.userData.partID === key));
   
-  // 吸附位置2：黄色立方体（蓝色球上方）
-  snapSlots.push({
-    position: new THREE.Vector3(0, baseY + baseHeight / 2 + 0.2 + pieceSpacing, 0),
-    pieceId: 'yellow-cube',
-    isOccupied: false
-  });
-  
-  // 吸附位置3：紫色柱子（黄色立方体上方）
-  snapSlots.push({
-    position: new THREE.Vector3(0, baseY + baseHeight / 2 + 0.2 + pieceSpacing * 2, 0),
-    pieceId: 'purple-cylinder',
-    isOccupied: false
-  });
-  
-  console.log('[Main] ✅ 吸附位置已更新，基座Y:', baseY, '高度:', baseHeight);
-}
-
-// ===================== UI 事件绑定 =====================
-function setupUIEvents() {
-  // 等待DOM完全加载
-  const bindEvents = () => {
-    const btnStart = document.getElementById('btn-start');
-    const btnCollection = document.getElementById('btn-collection');
-    const btnLogin = document.getElementById('btn-login');
-    const btnSettings = document.getElementById('btn-settings');
-    const pageMenu = document.getElementById('page-menu');
-    const gameHud = document.getElementById('page-game-hud');
-
-    console.log('[Main] UI按钮查找结果:', {
-      btnStart: !!btnStart,
-      btnCollection: !!btnCollection,
-      btnLogin: !!btnLogin,
-      btnSettings: !!btnSettings,
-      pageMenu: !!pageMenu,
-      gameHud: !!gameHud,
-    });
-
-    // ✅ 修复：开始筑梦按钮（使用多种方式确保能触发）
-    if (btnStart) {
-      const handleStartClick = (e) => {
-        e.preventDefault();
-        e.stopPropagation();
-        console.log('[Main] ✅ 开始筑梦按钮被点击');
-        
-        // 隐藏主菜单
-        if (pageMenu) {
-          pageMenu.classList.add('hidden');
-        }
-        
-        // 显示游戏HUD
-        if (gameHud) {
-          gameHud.style.display = 'flex';
-        }
-        
-        // 允许渲染器接收事件（游戏进行时）
-        if (renderer) {
-          renderer.domElement.style.pointerEvents = 'auto';
-        }
-        
-        return false;
-      };
-      
-      // 使用多种方式绑定
-      btnStart.addEventListener('click', handleStartClick, true); // 捕获阶段
-      btnStart.addEventListener('click', handleStartClick, false); // 冒泡阶段
-      btnStart.onclick = handleStartClick; // 直接设置onclick
-      
-      // 测试悬停
-      btnStart.addEventListener('mouseenter', () => {
-        console.log('[Main] 鼠标进入开始筑梦按钮');
-        btnStart.style.opacity = '0.9';
-      });
-      btnStart.addEventListener('mouseleave', () => {
-        btnStart.style.opacity = '1';
-      });
-      
-      console.log('[Main] ✅ 开始筑梦按钮事件已绑定（多种方式）');
-    } else {
-      console.error('[Main] ❌ 未找到 btn-start 按钮！');
-      // 延迟重试
-      setTimeout(() => {
-        const retryBtn = document.getElementById('btn-start');
-        if (retryBtn) {
-          retryBtn.onclick = () => {
-            console.log('[Main] ✅ 开始筑梦按钮被点击（延迟绑定）');
-            const pageMenu = document.getElementById('page-menu');
-            const gameHud = document.getElementById('page-game-hud');
-            if (pageMenu) pageMenu.classList.add('hidden');
-            if (gameHud) gameHud.style.display = 'flex';
-            if (renderer) renderer.domElement.style.pointerEvents = 'auto';
-          };
-          console.log('[Main] ✅ 开始筑梦按钮事件已绑定（延迟重试成功）');
-        }
-      }, 500);
-    }
-
-    // ✅ 修复：我的藏阁按钮（使用多种方式）
-    if (btnCollection) {
-      const handleCollectionClick = (e) => {
-        e.preventDefault();
-        e.stopPropagation();
-        console.log('[Main] ✅ 我的藏阁按钮被点击');
-        alert('我的藏阁功能（MVP版本暂未实现）');
-        return false;
-      };
-      btnCollection.addEventListener('click', handleCollectionClick, true);
-      btnCollection.addEventListener('click', handleCollectionClick, false);
-      btnCollection.onclick = handleCollectionClick;
-    }
-
-    // ✅ 修复：登录/注册按钮（使用多种方式）
-    if (btnLogin) {
-      const handleLoginClick = (e) => {
-        e.preventDefault();
-        e.stopPropagation();
-        console.log('[Main] ✅ 登录/注册按钮被点击');
-        alert('登录/注册功能（MVP版本暂未实现）');
-        return false;
-      };
-      btnLogin.addEventListener('click', handleLoginClick, true);
-      btnLogin.addEventListener('click', handleLoginClick, false);
-      btnLogin.onclick = handleLoginClick;
-    }
-
-    // ✅ 修复：秘境设置按钮（使用多种方式）
-    if (btnSettings) {
-      const handleSettingsClick = (e) => {
-        e.preventDefault();
-        e.stopPropagation();
-        console.log('[Main] ✅ 秘境设置按钮被点击');
-        alert('秘境设置功能（MVP版本暂未实现）');
-        return false;
-      };
-      btnSettings.addEventListener('click', handleSettingsClick, true);
-      btnSettings.addEventListener('click', handleSettingsClick, false);
-      btnSettings.onclick = handleSettingsClick;
-    }
-
-    // 游戏HUD的返回按钮
-    const btnHome = document.getElementById('btn-home');
-    if (btnHome) {
-      btnHome.addEventListener('click', (e) => {
-        e.preventDefault();
-        e.stopPropagation();
-        console.log('[Main] ✅ 返回主页按钮被点击');
-        
-        // 显示主菜单
-        if (pageMenu) {
-          pageMenu.classList.remove('hidden');
-        }
-        
-        // 隐藏游戏HUD
-        if (gameHud) {
-          gameHud.style.display = 'none';
-        }
-        
-        // 禁止渲染器接收事件（主菜单显示时）
-        if (renderer) {
-          renderer.domElement.style.pointerEvents = 'none';
-        }
-      });
-      console.log('[Main] ✅ 返回主页按钮事件已绑定');
-    }
-  };
-
-  // 确保DOM完全加载
-  if (document.readyState === 'loading') {
-    document.addEventListener('DOMContentLoaded', bindEvents);
-  } else {
-    // 延迟一点确保所有元素都已渲染
-    setTimeout(bindEvents, 100);
+  if (missingTargets.length > 0) {
+    console.warn("⚠️ 以下组件没有对应的目标位置:", missingTargets.map(p => p.userData.partID));
   }
+  if (missingPieces.length > 0) {
+    console.warn("⚠️ 以下目标位置没有对应的组件:", missingPieces);
+  }
+  if (missingTargets.length === 0 && missingPieces.length === 0) {
+    console.log("✅ 所有组件和目标位置都匹配！");
+  }
+  console.log("==================================");
 }
 
-// ===================== 自动吸附逻辑 =====================
-/**
- * 检查物品是否靠近吸附位置，如果靠近则自动吸附
- */
-function checkAutoSnap(piece) {
-  if (piece.userData.isSnapped) return; // 已经吸附，跳过
+// ===================== Step 1: 加载静态环境 =====================
+async function loadEnvironment() {
+  return new Promise((resolve, reject) => {
+    console.log('[Main] 加载背景环境: /models/背景版.glb');
+    gltfLoader.load(
+      '/models/背景版.glb',
+      (gltf) => {
+        const model = gltf.scene;
+        model.position.set(0, 0, 0); // 世界原点对齐
+        
+        // 启用阴影
+        model.traverse((child) => {
+          if (child.isMesh) {
+            child.castShadow = true;
+            child.receiveShadow = true;
+          }
+        });
+        
+        environmentModel = model;
+        environmentModel.userData.isStatic = true;
+        scene.add(environmentModel);
+        
+        console.log('[Main] ✅ 背景环境已加载');
+        resolve();
+      },
+      undefined,
+      (error) => {
+        console.error('[Main] ❌ 背景环境加载失败:', error);
+        reject(error);
+      }
+    );
+  });
+}
+
+// ===================== Step 2: 解析幽灵参照物 =====================
+async function loadGhostReference() {
+  return new Promise((resolve, reject) => {
+    console.log('[Main] 加载幽灵参照物: /models/幽灵组件.glb');
+    gltfLoader.load(
+      '/models/幽灵组件.glb',
+      (gltf) => {
+        const model = gltf.scene;
+        model.position.set(0, 0, 0); // 世界原点对齐
+        
+        // 遍历所有子节点，查找包含"配套"的节点
+        model.traverse((node) => {
+          if (node.isMesh && node.name && node.name.includes('配套')) {
+            // 提取基础名称（去掉"配套"后缀）
+            const baseName = node.name.replace('配套', '').trim();
+            
+            // ✅ 获取世界坐标和旋转（模型原点已对齐，直接读取，无需偏移）
+            const worldPosition = new THREE.Vector3();
+            const worldQuaternion = new THREE.Quaternion();
+            node.getWorldPosition(worldPosition);
+            node.getWorldQuaternion(worldQuaternion);
+            
+            // 存入目标配置
+            TARGET_CONFIG[baseName] = {
+              position: worldPosition.clone(),
+              quaternion: worldQuaternion.clone(),
+              isOccupied: false,
+              originalNode: node
+            };
+            
+            console.log(`[Main] ✅ 找到目标位置: ${baseName}`, worldPosition);
+          }
+        });
+        
+        // 隐藏幽灵模型
+        model.visible = false;
+        ghostModel = model;
+        scene.add(ghostModel);
+        
+        console.log('[Main] ✅ 幽灵参照物已解析，找到', Object.keys(TARGET_CONFIG).length, '个目标位置');
+        
+        // ✅ 调试：打印幽灵目标数据解析结果（对账单格式）
+        console.log("=== [DEBUG] 幽灵目标数据解析结果 ===");
+        console.log("目标点 (Target) 列表:");
+        Object.keys(TARGET_CONFIG).forEach(key => {
+          const target = TARGET_CONFIG[key];
+          console.log(`  ${key} | 世界坐标 (${target.position.x.toFixed(3)}, ${target.position.y.toFixed(3)}, ${target.position.z.toFixed(3)})`);
+        });
+        console.log("==================================");
+        
+        resolve();
+      },
+      undefined,
+      (error) => {
+        console.error('[Main] ❌ 幽灵参照物加载失败:', error);
+        reject(error);
+      }
+    );
+  });
+}
+
+// ===================== Step 3: 生成玩家组件 =====================
+async function loadInteractivePieces() {
+  const loadPromises = PIECE_NAMES.map((pieceName, index) => {
+    return new Promise((resolve, reject) => {
+      console.log(`[Main] 加载组件 [${index + 1}/${PIECE_NAMES.length}]: ${pieceName}`);
+      gltfLoader.load(
+        `/models/${pieceName}.glb`,
+        (gltf) => {
+          const model = gltf.scene;
+          
+          // ✅ 调试：检查模型原始缩放（Blender导出后应该是1.0）
+          const originalScale = model.scale.clone();
+          console.log(`[Main]   组件 ${pieceName} 原始缩放: [x:${originalScale.x.toFixed(3)}, y:${originalScale.y.toFixed(3)}, z:${originalScale.z.toFixed(3)}]`);
+          
+          // 身份绑定
+          model.userData.partID = pieceName;
+          model.userData.isSnapped = false;
+          model.userData.isDraggable = true;
+          
+          // ✅ 调试：检查是否有对应的目标位置
+          const target = TARGET_CONFIG[pieceName];
+          if (target) {
+            console.log(`[Main] ✅ 组件 ${pieceName} 有对应的目标位置:`, target.position);
+          } else {
+            console.warn(`[Main] ⚠️ 组件 ${pieceName} 没有对应的目标位置！可用目标:`, Object.keys(TARGET_CONFIG));
+          }
+          
+          // ✅ 修复：建立"备料架" - 放在红柱子右侧，更靠近工作区
+          // 红柱子大约在(0, 0, 0)，备料架放在右侧，方便拿取
+          const count = PIECE_NAMES.length;
+          const spacing = 1.2; // 组件间距
+          const startX = 2.0; // ✅ 起始X位置（红柱子右侧，从居中改为右侧）
+          
+          // ✅ 特殊处理：散科-左边和散科-右边放到更容易看到和抓取的位置
+          let dockPos;
+          if (pieceName === '散科-左边' || pieceName === '散科-右边') {
+            // 放到备料架前排（Z轴更靠前，更容易看到）
+            // 散科-左边放在左侧，散科-右边放在右侧
+            const sideIndex = pieceName === '散科-左边' ? 0 : 1;
+            dockPos = new THREE.Vector3(
+              1.5 + sideIndex * 1.5,  // X轴：左侧1.5，右侧3.0（更靠近红柱子）
+              1.2,                     // Y轴：稍微高一点，更容易看到
+              1.0                      // Z轴：更靠前，在备料架前排
+            );
+            console.log(`[Main] ✅ ${pieceName} 已放置到前排易抓取位置`);
+          } else {
+            // 其他组件正常排列在备料架
+            dockPos = new THREE.Vector3(
+              startX + index * spacing, // X轴从右侧开始排列
+              1.0,                      // Y轴高度1米（悬浮，不被地面遮挡）
+              0.5                       // ✅ Z轴接近红柱子（从1.5改为0.5，更靠近）
+            );
+          }
+          
+          model.position.copy(dockPos);
+          
+          // ✅ 保持原始缩放为1.0（Blender已导出为1.0，不需要额外缩放）
+          // model.scale.set(1.5, 1.5, 1.5); // 移除1.5倍缩放，保持原始1.0
+          
+          // ✅ 调试辅助：确保组件可见
+          model.visible = true;
+          
+          // ✅ 调试：输出组件最终位置和缩放
+          console.log(`[Main]   组件 ${pieceName} 已放置到备料架: 位置(${dockPos.x.toFixed(2)}, ${dockPos.y.toFixed(2)}, ${dockPos.z.toFixed(2)}), 缩放[${model.scale.x.toFixed(3)}, ${model.scale.y.toFixed(3)}, ${model.scale.z.toFixed(3)}]`);
+          
+          // 启用阴影
+          let meshCount = 0;
+          model.traverse((child) => {
+            if (child.isMesh) {
+              child.castShadow = true;
+              child.receiveShadow = true;
+              child.visible = true; // ✅ 确保所有子网格可见
+              meshCount++;
+              // ✅ 调试：输出每个Mesh的名称和可见性
+              console.log(`[Main]     Mesh: ${child.name || '未命名'}, 可见: ${child.visible}, 位置: [${child.position.x.toFixed(2)}, ${child.position.y.toFixed(2)}, ${child.position.z.toFixed(2)}]`);
+            }
+          });
+          
+          // ✅ 调试：检查是否有Mesh
+          if (meshCount === 0) {
+            console.warn(`[Main] ⚠️ 组件 ${pieceName} 没有找到任何Mesh！`);
+          } else {
+            console.log(`[Main] ✅ 组件 ${pieceName} 包含 ${meshCount} 个Mesh`);
+          }
+          
+          interactivePieces.push(model);
+          scene.add(model);
+          
+          console.log(`[Main] ✅ 组件 ${pieceName} 已加载并添加到场景`);
+          resolve();
+        },
+        undefined,
+        (error) => {
+          console.error(`[Main] ❌ 组件 ${pieceName} 加载失败:`, error);
+          reject(error);
+        }
+      );
+    });
+  });
   
-  // 找到对应的吸附位置
-  const slot = snapSlots.find(s => s.pieceId === piece.userData.pieceId && !s.isOccupied);
-  if (!slot) return; // 没有对应的吸附位置或已被占用
+  await Promise.all(loadPromises);
+  console.log('[Main] ✅ 所有玩家组件已加载到备料架');
   
-  // 计算距离（只考虑XZ平面，Y轴允许一定误差）
-  const dx = piece.position.x - slot.position.x;
-  const dz = piece.position.z - slot.position.z;
-  const horizontalDist = Math.sqrt(dx * dx + dz * dz);
-  const verticalDist = Math.abs(piece.position.y - slot.position.y);
+  // ✅ 调试：打印玩家组件对账单
+  console.log("=== [DEBUG] 玩家组件加载对账单 ===");
+  console.log("玩家组件 (Part) 列表:");
+  interactivePieces.forEach((piece) => {
+    const partID = piece.userData.partID;
+    const scale = piece.scale;
+    console.log(`  ${partID} | 初始坐标 (${piece.position.x.toFixed(3)}, ${piece.position.y.toFixed(3)}, ${piece.position.z.toFixed(3)}) | 缩放比例 [${scale.x.toFixed(3)}, ${scale.y.toFixed(3)}, ${scale.z.toFixed(3)}]`);
+  });
+  console.log("==================================");
+}
+
+// ===================== Step 4: 拖拽与吸附系统 =====================
+function checkSnap(piece) {
+  if (!piece.userData.isDraggable || piece.userData.isSnapped) {
+    return false;
+  }
   
-  // 如果水平距离和垂直距离都小于阈值，则吸附
-  if (horizontalDist < snapDistance && verticalDist < snapDistance) {
+  const partID = piece.userData.partID;
+  const target = TARGET_CONFIG[partID];
+  
+  if (!target) {
+    // ✅ 调试：如果找不到目标，输出所有可用的目标
+    console.warn(`[Main] ⚠️ 组件 ${partID} 没有对应的目标位置。可用目标:`, Object.keys(TARGET_CONFIG));
+    return false;
+  }
+  
+  if (target.isOccupied) {
+    console.debug(`[Main] 目标位置 ${partID} 已被占用`);
+    return false;
+  }
+  
+  // 计算距离
+  const distance = piece.position.distanceTo(target.position);
+  
+  // ✅ 减少调试日志输出（只在距离很近但未吸附时输出）
+  // if (distance < 1.5) {
+  //   console.log(`[Main] 📍 ${partID} 吸附检查: 距离 ${distance.toFixed(2)}米`);
+  // }
+  
+    // ✅ 吸附判定：距离小于阈值即可（调整为0.8米，更容易吸附）
+    let shouldSnap = false;
+    if (distance < SNAP_DISTANCE) {
+      // 计算角度差异（简化：只检查Y轴旋转）
+      const pieceQuat = new THREE.Quaternion();
+      piece.getWorldQuaternion(pieceQuat);
+      const angleDiff = pieceQuat.angleTo(target.quaternion);
+      
+      // ✅ 如果距离很近（小于1.0），忽略角度；否则检查角度
+      if (distance < 1.0 || angleDiff < SNAP_ANGLE_THRESHOLD) {
+        shouldSnap = true;
+      } else {
+        // ✅ 减少日志输出
+        // console.log(`[Main] ${partID} 距离: ${distance.toFixed(2)}米, 角度差: ${(angleDiff * 180 / Math.PI).toFixed(1)}°`);
+      }
+    }
+    // 移除距离太远时的日志，减少控制台噪音
+  
+  // 吸附判定
+  if (shouldSnap) {
+    // ✅ 调试：输出吸附前的信息
+    console.log(`[Main] 🎯 触发吸附！${partID} 距离: ${distance.toFixed(2)}米`);
+    console.log(`[Main]   当前位置:`, piece.position);
+    console.log(`[Main]   目标位置:`, target.position);
+    
+    // 强制设置位置和旋转
+    piece.position.copy(target.position);
+    piece.quaternion.copy(target.quaternion);
+    
+    // 锁定组件
     piece.userData.isSnapped = true;
-    piece.userData.snapSlot = slot;
-    slot.isOccupied = true;
+    piece.userData.isDraggable = false;
+    target.isOccupied = true;
     
-    // 立即移动到吸附位置
-    piece.position.copy(slot.position);
-    piece.material.color.setHex(0x00ff00); // 变绿色表示已吸附
-    
-    console.log(`[Main] ✅ ${piece.userData.pieceId} 已吸附到基座上方！`);
-    
-    // ✅ 播放拼接音效
+    // 播放音效
     if (audioSnap) {
       try {
-        audioSnap.currentTime = 0; // 重置到开头
+        audioSnap.currentTime = 0;
         audioSnap.play().catch(e => console.debug('[Main] 音效播放失败:', e));
       } catch (e) {
         console.debug('[Main] 音效播放错误:', e);
       }
     }
     
-    // 检查是否所有物品都已吸附
-    const allSnapped = puzzlePieces.every(p => p.userData.isSnapped);
-    if (allSnapped) {
-      console.log('[Main] 🎉 恭喜！所有物品都已拼装完成！');
+    console.log(`[Main] ✅ ${partID} 已安装到目标位置！位置:`, piece.position);
+    
+    // ✅ 检查是否全部完成（需要验证位置和角度是否正确）
+    const allSnapped = interactivePieces.every(p => {
+      if (!p.userData.isSnapped) return false;
       
-      // ✅ 播放成功音效
+      // ✅ 验证：检查组件是否真的在目标位置附近（距离 < 0.5米）
+      const partID = p.userData.partID;
+      const target = TARGET_CONFIG[partID];
+      if (!target) return false;
+      
+      const dist = p.position.distanceTo(target.position);
+      if (dist > 0.5) {
+        console.warn(`[Main] ⚠️ ${partID} 标记为已吸附，但距离目标还有 ${dist.toFixed(2)}米，未真正完成`);
+        return false;
+      }
+      
+      // ✅ 验证：检查角度是否正确（角度差 < 30度）
+      const pieceQuat = new THREE.Quaternion();
+      p.getWorldQuaternion(pieceQuat);
+      const angleDiff = pieceQuat.angleTo(target.quaternion);
+      if (angleDiff > Math.PI / 6) { // 30度
+        console.warn(`[Main] ⚠️ ${partID} 标记为已吸附，但角度差还有 ${(angleDiff * 180 / Math.PI).toFixed(1)}°，未真正完成`);
+        return false;
+      }
+      
+      return true;
+    });
+    
+    if (allSnapped) {
+      console.log('[Main] 🎉 恭喜！所有组件都已拼装完成！');
       if (audioWin) {
         try {
-          audioWin.currentTime = 0; // 重置到开头
+          audioWin.currentTime = 0;
           audioWin.play().catch(e => console.debug('[Main] 成功音效播放失败:', e));
         } catch (e) {
           console.debug('[Main] 成功音效播放错误:', e);
         }
       }
     }
+    
+    return true;
+  }
+  
+  return false;
+}
+
+// ===================== 手势映射到3D空间 =====================
+function mapGestureTo3D(gesture) {
+  // ✅ 修复：简化映射逻辑，确保方向正确
+  // MediaPipe坐标：x(0-1, 左到右), y(0-1, 上到下)
+  // 摄像头镜像导致左右相反，需要翻转X轴
+  
+  // X轴映射：左右移动
+  // 手向右移动(gesture.x增大) -> 小球应该向右移动(X增大)
+  // 需要翻转：targetX = -(gesture.x - 0.5) * 范围
+  const targetX = -(gesture.x - 0.5) * 8.0; // 范围约 -4 到 4
+  
+  // Y轴映射：上下移动
+  // 手向上移动(gesture.y减小) -> 小球应该向上移动(Y增大)
+  // MediaPipe的Y是从上到下，Three.js的Y是从下到上，需要翻转
+  const targetY = (1.0 - gesture.y) * 4.0 + 0.5; // 范围约 0.5 到 4.5
+  
+  // Z轴映射：前后移动（倾斜操作台）
+  // 手在屏幕下方(gesture.y接近1) -> Z较大（靠近备料架）
+  // 手在屏幕上方(gesture.y接近0) -> Z较小（靠近红柱子）
+  // 红柱子大约在Z=0，备料架在Z=1.5（调整后）
+  const targetZ = gesture.y * 1.5; // 范围约 0 到 1.5
+  
+  return new THREE.Vector3(targetX, targetY, targetZ);
+}
+
+// ===================== UI 事件绑定 =====================
+function setupUIEvents() {
+  const bindEvents = () => {
+    const btnStart = document.getElementById('btn-start');
+    const pageMenu = document.getElementById('page-menu');
+    const gameHud = document.getElementById('page-game-hud');
+    const btnHome = document.getElementById('btn-home');
+
+    // 开始筑梦按钮
+    if (btnStart) {
+      btnStart.addEventListener('click', async (e) => {
+        e.preventDefault();
+        e.stopPropagation();
+        console.log('[Main] ✅ 开始筑梦按钮被点击');
+        
+        if (pageMenu) pageMenu.classList.add('hidden');
+        if (gameHud) gameHud.style.display = 'flex';
+        if (renderer) {
+          renderer.domElement.style.pointerEvents = 'auto'; // ✅ 启用鼠标事件（包括滚轮）
+          // ✅ 确保 OrbitControls 能接收事件
+          if (controls) {
+            controls.enabled = true;
+          }
+        }
+        
+        // 启动手势输入
+        try {
+          await handInput.start();
+          cursorSphere.visible = true;
+          console.log('[Main] ✅ 手势输入已启动');
+        } catch (error) {
+          console.error('[Main] ❌ 手势输入启动失败:', error);
+    }
+  });
+}
+
+    // 返回主页按钮
+    if (btnHome) {
+      btnHome.addEventListener('click', (e) => {
+        e.preventDefault();
+        e.stopPropagation();
+        console.log('[Main] ✅ 返回主页按钮被点击');
+        
+        if (pageMenu) pageMenu.classList.remove('hidden');
+        if (gameHud) gameHud.style.display = 'none';
+        if (renderer) {
+          renderer.domElement.style.pointerEvents = 'none';
+          // ✅ 禁用 OrbitControls
+          if (controls) {
+            controls.enabled = false;
+          }
+        }
+        
+        // 停止手势输入
+        if (handInput) {
+          handInput.stop();
+          cursorSphere.visible = false;
+        }
+      });
+    }
+  };
+
+  if (document.readyState === 'loading') {
+    document.addEventListener('DOMContentLoaded', bindEvents);
+  } else {
+    setTimeout(bindEvents, 100);
   }
 }
 
@@ -484,103 +615,90 @@ function onWindowResize() {
   camera.aspect = window.innerWidth / window.innerHeight;
   camera.updateProjectionMatrix();
   renderer.setSize(window.innerWidth, window.innerHeight);
+  // 保持80%高度
+  renderer.domElement.style.height = `${window.innerHeight * 0.8}px`;
 }
 
 // ===================== 渲染循环 =====================
 function animate() {
   requestAnimationFrame(animate);
 
-  // 获取手势数据
+  // 更新控制器
+  if (controls) {
+    controls.update();
+  }
+
+  // 手势控制
   if (handInput && handInput.isConnected()) {
     const gesture = handInput.getGesture();
     
-    // ✅ 修复：映射手势坐标到 3D 空间（z=0 平面）
-    // MediaPipe 返回的坐标是归一化的 (0-1)，需要转换为 NDC (-1 到 1)
-    // ✅ 修复X轴方向：摄像头镜像导致左右相反，需要翻转X轴
-    const ndcX = -(gesture.x * 2 - 1);  // x: 0-1 -> -1 到 1，然后取反（翻转左右）
-    // ✅ 修复Y轴方向：MediaPipe的Y轴是从上到下(0-1)，Three.js的Y轴是从下到上
-    // 手向上移动(y减小) -> 小球应该向上移动(y增大)，所以需要翻转
-    const ndcY = 1 - gesture.y * 2;  // y: 0-1 -> 1 到 -1（Y轴翻转，手向上=小球向上）
+    // 映射手势到3D空间
+    const worldPos = mapGestureTo3D(gesture);
     
-    // ✅ 修复：扩大视野范围，让边缘对象更容易交互
-    const viewSize = 8; // 视野大小（单位）- 从4增加到8，扩大交互范围
-    const targetWorldX = (ndcX * viewSize) / 2;
-    const targetWorldY = (ndcY * viewSize) / 2;
+    // ✅ 修复：平滑移动光标（包含Z轴，确保所有轴都平滑）
+    smoothCursorX += (worldPos.x - smoothCursorX) * cursorSmoothAlpha;
+    smoothCursorY += (worldPos.y - smoothCursorY) * cursorSmoothAlpha;
+    smoothCursorZ += (worldPos.z - smoothCursorZ) * cursorSmoothAlpha;
     
-    // ✅ 修复：添加平滑处理，让移动更流畅（捏合时减少平滑，响应更快）
-    const smoothAlpha = gesture.isPinching ? 0.3 : cursorSmoothAlpha; // 捏合时响应更快
-    smoothCursorX += (targetWorldX - smoothCursorX) * smoothAlpha;
-    smoothCursorY += (targetWorldY - smoothCursorY) * smoothAlpha;
+    cursorSphere.position.set(smoothCursorX, smoothCursorY, smoothCursorZ);
     
-    // 更新绿色小球位置
-    cursorSphere.position.x = smoothCursorX;
-    cursorSphere.position.y = smoothCursorY;
-    cursorSphere.position.z = 0;
-    
-    // ✅ 修复：检查是否捏合（抓取拼装物品）
+    // 抓取逻辑
     if (gesture.isPinching) {
-      const grabThreshold = 0.4; // 抓取阈值
-      const releaseThreshold = 0.6; // 释放阈值
-      
-      // 如果已经抓取了对象，检查是否还在范围内
-      if (grabbedObject) {
-        const dist = cursorSphere.position.distanceTo(grabbedObject.position);
-        if (dist < releaseThreshold && !grabbedObject.userData.isSnapped) {
-          // 还在范围内且未吸附，继续跟随
-          grabbedObject.position.x = cursorSphere.position.x;
-          grabbedObject.position.y = cursorSphere.position.y;
-          grabbedObject.position.z = cursorSphere.position.z;
-          
-          // ✅ 检查是否靠近吸附位置（自动吸附逻辑）
-          checkAutoSnap(grabbedObject);
-        } else {
-          // 超出范围或已吸附，释放
-          if (!grabbedObject.userData.isSnapped) {
-            grabbedObject.material.color.setHex(grabbedObject.userData.originalColor);
-          }
-          grabbedObject = null;
-          isGrabbing = false;
-        }
-      } else {
-        // 没有抓取对象，寻找最近的拼装物品（排除已吸附的）
-        const availablePieces = puzzlePieces.filter(p => !p.userData.isSnapped);
+      if (!isGrabbing) {
+        // ✅ 只在未抓取时寻找最近的未吸附组件（防止意外切换）
+        const availablePieces = interactivePieces.filter(p => p.userData.isDraggable && !p.userData.isSnapped);
         let closestPiece = null;
         let closestDist = Infinity;
         
+        // ✅ 调试：输出抓取尝试信息（减少日志频率）
+        // console.log(`[Main] 🔍 尝试抓取 - 光标位置: [x:${cursorSphere.position.x.toFixed(2)}, y:${cursorSphere.position.y.toFixed(2)}, z:${cursorSphere.position.z.toFixed(2)}], 可用组件数: ${availablePieces.length}`);
+        
         availablePieces.forEach((piece) => {
           const dist = cursorSphere.position.distanceTo(piece.position);
-          if (dist < grabThreshold && dist < closestDist) {
+          // console.log(`[Main]   组件 ${piece.userData.partID} 距离: ${dist.toFixed(2)}米, 位置: [x:${piece.position.x.toFixed(2)}, y:${piece.position.y.toFixed(2)}, z:${piece.position.z.toFixed(2)}]`);
+          if (dist < 2.5 && dist < closestDist) { // ✅ 降低抓取阈值，更精确（从3.5改为2.5）
             closestDist = dist;
             closestPiece = piece;
           }
         });
         
-        // 如果找到最近的物品，抓取它
         if (closestPiece) {
           grabbedObject = closestPiece;
           isGrabbing = true;
-          closestPiece.material.color.setHex(0xffffff); // 高亮显示（变白色）
-          console.log(`[Main] ✅ 抓取 ${closestPiece.userData.pieceId} 成功！`);
+          console.log(`[Main] ✅ 抓取 ${closestPiece.userData.partID} 成功！距离: ${closestDist.toFixed(2)}米`);
         }
+        // 移除未找到的日志，减少控制台噪音
+      } else if (grabbedObject) {
+        // ✅ 关键：一旦抓取，就锁定这个对象，直到松开（防止意外切换）
+        // 移动被抓取的组件
+        grabbedObject.position.copy(cursorSphere.position);
+        
+        // ✅ 每帧都检查吸附（确保能及时吸附）
+        checkSnap(grabbedObject);
       }
     } else {
-      // ✅ 修复：松开手，恢复颜色（如果未吸附）
-      if (isGrabbing && grabbedObject && !grabbedObject.userData.isSnapped) {
-        grabbedObject.material.color.setHex(grabbedObject.userData.originalColor);
+      // 松开
+      if (isGrabbing && grabbedObject) {
+        // ✅ 最终检查吸附（松开时也检查一次）
+        const snapped = checkSnap(grabbedObject);
+        if (!snapped) {
+          // ✅ 减少日志输出，只在距离较近但未吸附时输出（帮助调试）
+          const partID = grabbedObject.userData.partID;
+          const target = TARGET_CONFIG[partID];
+          if (target) {
+            const dist = grabbedObject.position.distanceTo(target.position);
+            // 只在距离较近但未吸附时输出
+            if (dist < 3.0) {
+              console.log(`[Main] 松开 ${partID}，距离目标: ${dist.toFixed(2)}米 (需要 < ${SNAP_DISTANCE}米)`);
+            }
+          }
+        }
         grabbedObject = null;
         isGrabbing = false;
-        console.log('[Main] 松开对象');
       }
     }
     
-    // ✅ 新增：更新已吸附物品的位置（平滑吸附动画）
-    puzzlePieces.forEach((piece) => {
-      if (piece.userData.isSnapped && piece.userData.snapSlot) {
-        const slot = piece.userData.snapSlot;
-        // 平滑移动到吸附位置
-        piece.position.lerp(slot.position, 0.15);
-      }
-    });
+    // ✅ 移除：减少不必要的调试日志输出
   }
 
   // 渲染场景
@@ -588,13 +706,18 @@ function animate() {
 }
 
 // ===================== 启动 =====================
-// 确保DOM完全加载
 if (document.readyState === 'loading') {
   document.addEventListener('DOMContentLoaded', () => {
-    init();
-    animate();
+    init().then(() => {
+      animate();
+    }).catch(error => {
+      console.error('[Main] ❌ 初始化失败:', error);
+    });
   });
 } else {
-init();
+  init().then(() => {
 animate();
+  }).catch(error => {
+    console.error('[Main] ❌ 初始化失败:', error);
+  });
 }
