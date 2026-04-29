@@ -1,0 +1,345 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8" />
+  <title>斗拱关卡校准器 · Calibrator</title>
+  <style>
+    * { box-sizing: border-box; }
+    html, body { margin: 0; padding: 0; height: 100%; overflow: hidden; font-family: -apple-system, "Segoe UI", "Microsoft YaHei", sans-serif; background: #1e1816; color: #e8dcc8; }
+    #app { position: fixed; inset: 0; }
+    #panel {
+      position: fixed; top: 16px; left: 16px;
+      width: 360px; max-height: calc(100vh - 32px); overflow-y: auto;
+      background: rgba(28, 22, 18, 0.92); border: 1px solid rgba(255, 215, 0, 0.35);
+      border-radius: 10px; padding: 16px 18px; backdrop-filter: blur(8px); z-index: 100;
+      font-size: 13px; line-height: 1.55;
+    }
+    #panel h1 { margin: 0 0 6px; font-size: 16px; color: #ffd24a; letter-spacing: 1px; }
+    #panel h2 { margin: 14px 0 6px; font-size: 13px; color: #c8a063; letter-spacing: 1px; border-bottom: 1px solid rgba(255,215,0,0.15); padding-bottom: 4px; }
+    .row { margin-bottom: 8px; }
+    label { display: block; color: #a89070; font-size: 11px; margin-bottom: 2px; }
+    input[type="text"], input[type="file"], textarea {
+      width: 100%; background: #2c211c; border: 1px solid rgba(255,215,0,0.18);
+      color: #e8dcc8; padding: 6px 8px; border-radius: 4px; font-size: 12px; font-family: monospace;
+    }
+    textarea { min-height: 120px; resize: vertical; }
+    button {
+      background: linear-gradient(180deg, #b91c1c 0%, #8a1010 100%);
+      color: #fff; border: 1px solid rgba(255,215,0,0.4); border-radius: 5px;
+      padding: 7px 14px; font-size: 12px; cursor: pointer; letter-spacing: 1px;
+    }
+    button:hover { background: linear-gradient(180deg, #d12626 0%, #a81212 100%); }
+    button.ghost { background: transparent; border-color: rgba(255,215,0,0.3); color: #ffd24a; }
+    button.ghost:hover { background: rgba(255,215,0,0.1); }
+    button:disabled { opacity: 0.4; cursor: not-allowed; }
+    .piece-row {
+      display: flex; align-items: center; gap: 6px; padding: 6px 8px;
+      background: #2c211c; border-radius: 4px; margin-bottom: 4px; cursor: pointer;
+      transition: background 0.15s;
+    }
+    .piece-row:hover { background: #3a2c24; }
+    .piece-row.selected { background: rgba(255, 215, 0, 0.18); border: 1px solid rgba(255,215,0,0.5); }
+    .piece-row .name { flex: 1; font-weight: 500; }
+    .piece-row .pos { font-size: 10px; color: #a89070; font-family: monospace; }
+    .controls-tip { font-size: 11px; color: #a89070; margin-top: 6px; line-height: 1.6; }
+    .controls-tip kbd {
+      background: #3a2c24; border: 1px solid rgba(255,215,0,0.2); border-radius: 3px;
+      padding: 1px 5px; font-family: monospace; font-size: 10px; color: #ffd24a;
+    }
+    #export-output { margin-top: 8px; }
+    .status-msg { font-size: 11px; color: #88c87a; margin-top: 4px; min-height: 14px; }
+    .status-err { color: #e87878; }
+  </style>
+</head>
+<body>
+  <div id="app"></div>
+
+  <div id="panel">
+    <h1>关卡校准器</h1>
+    <div style="font-size: 11px; color: #a89070; margin-bottom: 8px;">
+      整体建模成品 → 拖动零件对齐 → 导出 targetOverrides JSON
+    </div>
+
+    <h2>1. 加载整体成品（参照）</h2>
+    <div class="row">
+      <label>成品 GLB 路径（相对 public/，例 /models/level2/成品.glb）</label>
+      <input type="text" id="ghost-path" placeholder="/models/level2/成品.glb" value="/models/level2/成品.glb" />
+    </div>
+    <div class="row">
+      <button id="btn-load-ghost">加载成品参照</button>
+      <span class="status-msg" id="status-ghost"></span>
+    </div>
+
+    <h2>2. 加载零件（可拖动）</h2>
+    <div class="row">
+      <label>零件名（每行一个，对应 /models/level2/{名}.glb）</label>
+      <textarea id="piece-list" placeholder="piece1&#10;piece2&#10;piece3&#10;piece4&#10;piece5&#10;piece6">piece1
+piece2
+piece3
+piece4
+piece5
+piece6</textarea>
+    </div>
+    <div class="row">
+      <label>路径前缀</label>
+      <input type="text" id="piece-prefix" value="/models/level2/" />
+    </div>
+    <div class="row">
+      <button id="btn-load-pieces">加载所有零件</button>
+      <span class="status-msg" id="status-pieces"></span>
+    </div>
+
+    <h2>3. 选中零件后拖动 / 旋转</h2>
+    <div id="piece-list-ui"></div>
+    <div class="controls-tip">
+      <div><kbd>左键拖</kbd> 当前 gizmo 控制 ·  <kbd>W</kbd>=移动 / <kbd>E</kbd>=旋转 / <kbd>R</kbd>=缩放</div>
+      <div><kbd>右键拖</kbd> 旋转视角 · <kbd>滚轮</kbd> 缩放视角 · <kbd>中键拖</kbd> 平移视角</div>
+      <div><kbd>X</kbd>/<kbd>Y</kbd>/<kbd>Z</kbd> 锁定单轴 · <kbd>Esc</kbd> 取消选中</div>
+    </div>
+
+    <h2>4. 导出</h2>
+    <div class="row">
+      <button id="btn-export" class="ghost">生成 targetOverrides JSON</button>
+      <button id="btn-copy" class="ghost" disabled>复制到剪贴板</button>
+      <span class="status-msg" id="status-export"></span>
+    </div>
+    <div class="row" id="export-output" style="display:none;">
+      <textarea id="json-output" readonly style="min-height: 180px; font-size: 10px;"></textarea>
+      <div class="controls-tip" style="margin-top:6px;">
+        把这段粘贴到 main.js 中对应 LEVEL 的 <code style="color:#ffd24a;">targetOverrides</code> 字段。
+      </div>
+    </div>
+  </div>
+
+  <!-- 用 importmap 让 three / three/addons 可被 type=module 解析 -->
+  <script type="importmap">
+  {
+    "imports": {
+      "three": "https://cdn.jsdelivr.net/npm/three@0.160.0/build/three.module.js",
+      "three/addons/": "https://cdn.jsdelivr.net/npm/three@0.160.0/examples/jsm/"
+    }
+  }
+  </script>
+
+  <script type="module">
+    import * as THREE from 'three';
+    import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
+    import { TransformControls } from 'three/addons/controls/TransformControls.js';
+    import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js';
+
+    // ===== Three 场景搭建 =====
+    const app = document.getElementById('app');
+    const scene = new THREE.Scene();
+    scene.background = new THREE.Color(0x1e1816);
+
+    const camera = new THREE.PerspectiveCamera(45, window.innerWidth / window.innerHeight, 0.1, 100);
+    camera.position.set(5, 4, 6);
+
+    const renderer = new THREE.WebGLRenderer({ antialias: true });
+    renderer.setSize(window.innerWidth, window.innerHeight);
+    renderer.setPixelRatio(window.devicePixelRatio);
+    app.appendChild(renderer.domElement);
+
+    // 环境光
+    scene.add(new THREE.AmbientLight(0xffffff, 0.7));
+    const dir = new THREE.DirectionalLight(0xffffff, 0.9);
+    dir.position.set(5, 8, 5);
+    scene.add(dir);
+
+    // 网格 + 坐标系参考
+    scene.add(new THREE.GridHelper(10, 10, 0x666666, 0x333333));
+    scene.add(new THREE.AxesHelper(2));
+
+    // OrbitControls
+    const orbit = new OrbitControls(camera, renderer.domElement);
+    orbit.target.set(0, 1.5, 0);
+    orbit.enableDamping = true;
+
+    // TransformControls
+    const tc = new TransformControls(camera, renderer.domElement);
+    tc.setSize(0.8);
+    scene.add(tc);
+    tc.addEventListener('dragging-changed', (e) => { orbit.enabled = !e.value; });
+    tc.addEventListener('change', refreshSelectedRow);
+
+    // 键盘切换 gizmo 模式
+    window.addEventListener('keydown', (e) => {
+      if (e.target.tagName === 'INPUT' || e.target.tagName === 'TEXTAREA') return;
+      if (e.key === 'w' || e.key === 'W') tc.setMode('translate');
+      else if (e.key === 'e' || e.key === 'E') tc.setMode('rotate');
+      else if (e.key === 'r' || e.key === 'R') tc.setMode('scale');
+      else if (e.key === 'x' || e.key === 'X') tc.showX = !tc.showX;
+      else if (e.key === 'y' || e.key === 'Y') tc.showY = !tc.showY;
+      else if (e.key === 'z' || e.key === 'Z') tc.showZ = !tc.showZ;
+      else if (e.key === 'Escape') { tc.detach(); selectedPiece = null; renderPieceList(); }
+    });
+
+    // ===== 状态 =====
+    let ghostObj = null;
+    const pieces = []; // { name, obj }
+    let selectedPiece = null;
+
+    const gltfLoader = new GLTFLoader();
+
+    // ===== UI 工具 =====
+    function status(elemId, msg, isErr = false) {
+      const el = document.getElementById(elemId);
+      el.textContent = msg;
+      el.className = 'status-msg' + (isErr ? ' status-err' : '');
+    }
+
+    function renderPieceList() {
+      const ui = document.getElementById('piece-list-ui');
+      ui.innerHTML = '';
+      pieces.forEach((p, i) => {
+        const row = document.createElement('div');
+        row.className = 'piece-row' + (selectedPiece === p ? ' selected' : '');
+        const pos = p.obj.position;
+        row.innerHTML = `
+          <span class="name">${p.name}</span>
+          <span class="pos" data-piece="${p.name}">
+            (${pos.x.toFixed(2)}, ${pos.y.toFixed(2)}, ${pos.z.toFixed(2)})
+          </span>
+        `;
+        row.addEventListener('click', () => selectPiece(p));
+        ui.appendChild(row);
+      });
+    }
+
+    function refreshSelectedRow() {
+      if (!selectedPiece) return;
+      const span = document.querySelector(`.pos[data-piece="${CSS.escape(selectedPiece.name)}"]`);
+      if (span) {
+        const pos = selectedPiece.obj.position;
+        span.textContent = `(${pos.x.toFixed(2)}, ${pos.y.toFixed(2)}, ${pos.z.toFixed(2)})`;
+      }
+    }
+
+    function selectPiece(p) {
+      selectedPiece = p;
+      tc.attach(p.obj);
+      renderPieceList();
+    }
+
+    // ===== 加载逻辑 =====
+    document.getElementById('btn-load-ghost').addEventListener('click', () => {
+      const path = document.getElementById('ghost-path').value.trim();
+      if (!path) { status('status-ghost', '请填写路径', true); return; }
+
+      // 移除旧的
+      if (ghostObj) { scene.remove(ghostObj); ghostObj = null; }
+
+      status('status-ghost', '加载中…');
+      // ⚠️ 此工具是从 /tools/calibrator.html 启动的，路径相对 public/
+      // GLTFLoader 会按 base href 解析，传 /xxx.glb 需要 vite dev server 支持
+      // 用相对路径 ../models/... 直接走文件系统也行（开发期）
+      const url = path.startsWith('/') ? '..' + path : path;
+      gltfLoader.load(url, (gltf) => {
+        const m = gltf.scene;
+        m.position.set(0, 0, 0);
+        // 半透明 + 暗色调，作为参照
+        m.traverse((node) => {
+          if (node.isMesh && node.material) {
+            node.material = node.material.clone();
+            node.material.transparent = true;
+            node.material.opacity = 0.45;
+            node.material.depthWrite = false;
+          }
+        });
+        ghostObj = m;
+        scene.add(ghostObj);
+        status('status-ghost', `✅ 成品已加载（半透明显示）`);
+      }, undefined, (err) => {
+        console.error(err);
+        status('status-ghost', `加载失败：${err.message || err}`, true);
+      });
+    });
+
+    document.getElementById('btn-load-pieces').addEventListener('click', async () => {
+      const names = document.getElementById('piece-list').value.split('\n').map(s => s.trim()).filter(Boolean);
+      const prefix = document.getElementById('piece-prefix').value.trim();
+      if (names.length === 0) { status('status-pieces', '请填写零件名', true); return; }
+
+      // 清空现有
+      pieces.forEach(p => scene.remove(p.obj));
+      pieces.length = 0;
+      selectedPiece = null;
+      tc.detach();
+      renderPieceList();
+
+      status('status-pieces', '加载中…');
+      let loaded = 0, failed = 0;
+
+      for (let i = 0; i < names.length; i++) {
+        const name = names[i];
+        const path = prefix + name + '.glb';
+        const url = path.startsWith('/') ? '..' + path : path;
+
+        try {
+          const gltf = await new Promise((res, rej) => gltfLoader.load(url, res, undefined, rej));
+          const obj = gltf.scene;
+          // 默认错位摆放，避免重叠（环形分布在原点周围）
+          const angle = (i / names.length) * Math.PI * 2;
+          obj.position.set(Math.cos(angle) * 2, 1.5, Math.sin(angle) * 2);
+          scene.add(obj);
+          pieces.push({ name, obj });
+          loaded++;
+        } catch (err) {
+          console.warn(`零件 ${name} 加载失败:`, err);
+          failed++;
+        }
+      }
+      status('status-pieces', `✅ 已加载 ${loaded} 个零件${failed ? `（${failed} 个失败）` : ''}`);
+      renderPieceList();
+    });
+
+    // ===== 导出 =====
+    document.getElementById('btn-export').addEventListener('click', () => {
+      if (pieces.length === 0) { status('status-export', '没有可导出的零件', true); return; }
+
+      const overrides = {};
+      pieces.forEach(p => {
+        const pos = p.obj.position;
+        const q = p.obj.quaternion;
+        overrides[p.name] = {
+          position: { x: +pos.x.toFixed(4), y: +pos.y.toFixed(4), z: +pos.z.toFixed(4) },
+          quaternion: { x: +q.x.toFixed(4), y: +q.y.toFixed(4), z: +q.z.toFixed(4), w: +q.w.toFixed(4) },
+        };
+      });
+
+      const code = `targetOverrides: ${JSON.stringify(overrides, null, 2)},`;
+      document.getElementById('json-output').value = code;
+      document.getElementById('export-output').style.display = 'block';
+      document.getElementById('btn-copy').disabled = false;
+      status('status-export', `✅ 已生成 ${pieces.length} 个零件的配置`);
+    });
+
+    document.getElementById('btn-copy').addEventListener('click', () => {
+      const ta = document.getElementById('json-output');
+      ta.select();
+      try {
+        navigator.clipboard.writeText(ta.value).then(() => {
+          status('status-export', '✅ 已复制到剪贴板');
+        });
+      } catch (e) {
+        document.execCommand('copy');
+        status('status-export', '✅ 已复制到剪贴板');
+      }
+    });
+
+    // ===== 渲染循环 =====
+    function animate() {
+      requestAnimationFrame(animate);
+      orbit.update();
+      renderer.render(scene, camera);
+    }
+    animate();
+
+    window.addEventListener('resize', () => {
+      camera.aspect = window.innerWidth / window.innerHeight;
+      camera.updateProjectionMatrix();
+      renderer.setSize(window.innerWidth, window.innerHeight);
+    });
+  </script>
+</body>
+</html>
