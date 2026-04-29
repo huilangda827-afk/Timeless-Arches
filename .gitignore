@@ -47,6 +47,8 @@ yarn-error.log*
 
 # ===== Cursor 专用 =====
 .cursor/projects/
+.cursor/debug.log
+.cursor/*.log
 
 # ===== 其他临时 =====
 *.bak
