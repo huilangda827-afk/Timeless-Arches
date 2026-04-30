@@ -1,0 +1,243 @@
+<!doctype html>
+<html lang="zh-CN">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>拾光筑梦 - Timeless Arches</title>
+    <link rel="stylesheet" href="src/style.css" />
+  </head>
+  <body>
+    <!-- Three.js 渲染容器（由 main.js 自动创建） -->
+    
+    <!-- UI 覆盖层 -->
+    <div id="ui-layer">
+      <!-- 主菜单页面（4C 改造：仅保留"开始筑梦"，藏阁/登录/设置走门户首页） -->
+      <div class="page-menu" id="page-menu">
+        <h1 class="main-title">拾光筑梦</h1>
+        <p class="main-subtitle">指尖重现千年斗拱</p>
+        
+        <div class="menu-buttons">
+          <button class="btn btn-primary" id="btn-start">
+            <span>开始筑梦</span>
+          </button>
+        </div>
+      </div>
+
+      <!-- 游戏HUD页面 -->
+      <div class="page-game-hud" id="page-game-hud" style="display: none;">
+        <!-- 顶部状态栏：左侧关卡名/当前任务，右侧"提示"按钮 -->
+        <div class="hud-top">
+          <div class="hud-status">
+            <span class="status-text" id="status-text">「单翘斗拱」筑梦中…</span>
+          </div>
+          <div style="display:flex;gap:10px;align-items:center;flex-shrink:0;">
+            <button class="btn btn-outline" id="btn-zoom"
+              style="width:auto;min-width:110px;padding:8px 18px;font-size:0.95rem;flex-shrink:0;"
+              title="按 Z 键或点击切换放大模式（操作更精细）">放大 (Z)</button>
+            <button class="btn btn-outline" id="btn-hint"
+              style="width:auto;min-width:110px;padding:8px 18px;font-size:0.95rem;flex-shrink:0;"
+              title="按 H 键或点击切换目标位置高亮">提示 (H)</button>
+            <button class="btn btn-outline" id="btn-knowledge"
+              style="width:auto;min-width:110px;padding:8px 18px;font-size:0.95rem;flex-shrink:0;"
+              title="按 K 键或点击查看本关斗拱知识图">知识图 (K)</button>
+            <button class="btn btn-outline" id="btn-camera-reset"
+              style="width:auto;min-width:110px;padding:8px 18px;font-size:0.95rem;flex-shrink:0;"
+              title="按 V 键或点击复位到默认机位（最易于拼接的视角）">复位 (V)</button>
+            <button class="btn btn-outline" id="btn-settings-game"
+              style="width:auto;min-width:50px;padding:8px 14px;font-size:1.1rem;flex-shrink:0;"
+              title="设置（灵敏度/光标/特效/音量）">⚙</button>
+          </div>
+        </div>
+
+        <!-- 左侧手势指引：去掉未实现的旋转，明确"双指捏合"交互 -->
+        <div class="hud-gesture-guide">
+          <div class="guide-header">
+            <span class="guide-icon">✋</span>
+            <span class="guide-title">手势指引</span>
+          </div>
+          <div class="guide-list">
+            <div class="guide-item">
+              <span class="guide-number">1</span>
+              <span class="guide-text">拇指与食指<b>捏合</b>，抓起构件</span>
+            </div>
+            <div class="guide-item">
+              <span class="guide-number">2</span>
+              <span class="guide-text">移动手部，拖动构件到目标位</span>
+            </div>
+            <div class="guide-item">
+              <span class="guide-number">3</span>
+              <span class="guide-text"><b>松开</b>手指，自动判定拼接</span>
+            </div>
+          </div>
+        </div>
+
+        <!-- 中央状态提示 -->
+        <div class="hud-center-status" id="hud-center-status" style="display: none;">
+          <span class="center-status-text"></span>
+        </div>
+
+        <!-- 底部控制按钮 -->
+        <div class="hud-bottom">
+          <button class="btn-circle" id="btn-reset" title="重新开始本关（R）"
+            style="background:rgba(40,30,25,0.85);border:1px solid rgba(255,215,0,0.35);">
+            <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"
+              stroke-linecap="round" stroke-linejoin="round">
+              <polyline points="1 4 1 10 7 10"/>
+              <path d="M3.51 15a9 9 0 1 0 2.13-9.36L1 10"/>
+            </svg>
+          </button>
+          <!-- 4C 改造：隐藏返回主页按钮（筑梦页面不允许中途退出，避免主菜单/门户入口的二次混淆） -->
+          <button class="btn-circle" id="btn-home" title="返回主页" style="display:none;">
+            <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+              <path d="M3 9l9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/>
+              <polyline points="9 22 9 12 15 12 15 22"/>
+            </svg>
+          </button>
+        </div>
+      </div>
+
+      <!-- 覆盖层页面（登录/设置/结算等模态框） -->
+      <div class="page-overlays">
+        <!-- 登录页面（模态框） -->
+        <div class="modal-overlay" id="page-login">
+        <div class="modal-container login-modal">
+          <button class="modal-close" id="login-close">&times;</button>
+          <h2 class="modal-title">登录</h2>
+          <p class="modal-subtitle">欢迎回到拾光筑梦</p>
+          
+          <form class="login-form">
+            <div class="form-group">
+              <label for="login-account">账号 / 邮箱</label>
+              <input 
+                type="text" 
+                id="login-account" 
+                class="form-input" 
+                placeholder="请输入账号"
+                autocomplete="username"
+              />
+            </div>
+            
+            <div class="form-group">
+              <label for="login-password">密码</label>
+              <div class="input-wrapper">
+                <input 
+                  type="password" 
+                  id="login-password" 
+                  class="form-input" 
+                  placeholder="请输入密码"
+                  autocomplete="current-password"
+                />
+                <button type="button" class="password-toggle" id="password-toggle">
+                  <span class="eye-icon">👁</span>
+                </button>
+              </div>
+            </div>
+            
+            <button type="submit" class="btn btn-primary btn-modal">进入梦境</button>
+            <button type="button" class="btn-link" id="btn-register">没有账号？去注册</button>
+          </form>
+        </div>
+        </div>
+
+        <!-- 设置页面（模态框） -->
+        <div class="modal-overlay" id="page-settings">
+        <div class="modal-container settings-modal">
+          <button class="modal-close" id="settings-close">&times;</button>
+          <h2 class="modal-title">秘境设置</h2>
+          
+          <div class="settings-content">
+            <div class="setting-item">
+              <label class="setting-label">背景音乐</label>
+              <div class="setting-control">
+                <input 
+                  type="range" 
+                  class="slider" 
+                  id="setting-music" 
+                  min="0" 
+                  max="100" 
+                  value="50"
+                />
+                <span class="setting-value" id="music-value">50%</span>
+              </div>
+            </div>
+            
+            <div class="setting-item">
+              <label class="setting-label">灵敏度</label>
+              <div class="setting-control">
+                <input 
+                  type="range" 
+                  class="slider" 
+                  id="setting-sensitivity" 
+                  min="0" 
+                  max="100" 
+                  value="70"
+                />
+                <span class="setting-value" id="sensitivity-value">70%</span>
+              </div>
+            </div>
+            
+            <div class="setting-item">
+              <label class="setting-label">鼠标辅助模式</label>
+              <div class="setting-control">
+                <label class="toggle-switch">
+                  <input type="checkbox" id="setting-auxiliary" checked />
+                  <span class="toggle-slider"></span>
+                </label>
+              </div>
+            </div>
+          </div>
+          
+          <button class="btn btn-outline btn-reset" id="btn-reset">返回主殿</button>
+        </div>
+        </div>
+      </div>
+
+      <!-- 藏阁页面（网格布局） -->
+      <div class="gallery-page" id="page-gallery">
+        <div class="gallery-header">
+          <h2 class="gallery-title">我的藏阁</h2>
+          <button class="btn btn-outline btn-return" id="gallery-return">返回</button>
+        </div>
+        
+        <div class="gallery-grid">
+          <div class="gallery-card">
+            <div class="card-image">
+              <img src="/tang.png" alt="唐代斗拱" />
+            </div>
+            <div class="card-content">
+              <h3 class="card-title">唐代斗拱</h3>
+              <p class="card-subtitle">雄大豪迈,用材硕大</p>
+            </div>
+          </div>
+          
+          <div class="gallery-card">
+            <div class="card-image">
+              <img src="/song.png" alt="宋式铺作" />
+            </div>
+            <div class="card-content">
+              <h3 class="card-title">宋式铺作</h3>
+              <p class="card-subtitle">规范严谨,形式多样</p>
+            </div>
+          </div>
+          
+          <div class="gallery-card">
+            <div class="card-image">
+              <img src="/mingqing.png" alt="明清斗科" />
+            </div>
+            <div class="card-content">
+              <h3 class="card-title">明清斗科</h3>
+              <p class="card-subtitle">装饰繁复,构件细小</p>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- MediaPipe CDN：仅在用户选择浏览器端直连时需要（不会影响服务端模式） -->
+    <script src="https://cdn.jsdelivr.net/npm/@mediapipe/camera_utils/camera_utils.js" crossorigin="anonymous"></script>
+    <script src="https://cdn.jsdelivr.net/npm/@mediapipe/control_utils/control_utils.js" crossorigin="anonymous"></script>
+    <script src="https://cdn.jsdelivr.net/npm/@mediapipe/drawing_utils/drawing_utils.js" crossorigin="anonymous"></script>
+    <script src="https://cdn.jsdelivr.net/npm/@mediapipe/hands/hands.js" crossorigin="anonymous"></script>
+    <script type="module" src="src/main.js"></script>
+  </body>
+</html>
