@@ -16,6 +16,8 @@ export default defineConfig({
         main: resolve(__dirname, 'index.html'),
         // 筑梦游戏（原 main.js 入口）
         forge: resolve(__dirname, 'forge.html'),
+        // 精微匠造（精细模式：键鼠精确摆放 + 数值微调 + 等级校验）
+        precision: resolve(__dirname, 'precision.html'),
       },
     },
   },

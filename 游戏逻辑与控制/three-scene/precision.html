@@ -1,0 +1,524 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>精微匠造 · 精细模式</title>
+  <style>
+    * { box-sizing: border-box; }
+    html, body {
+      margin: 0; padding: 0; height: 100%; overflow: hidden;
+      font-family: -apple-system, "Segoe UI", "Microsoft YaHei", "PingFang SC", sans-serif;
+      background: #1a1612; color: #e8dcc8;
+    }
+    #app { position: fixed; inset: 0; z-index: 0; }
+
+    /* 顶部 bar */
+    #topbar {
+      position: fixed; top: 0; left: 0; right: 0; height: 56px;
+      display: flex; align-items: center; padding: 0 18px;
+      background: linear-gradient(180deg, rgba(28,22,18,0.96) 0%, rgba(28,22,18,0.85) 100%);
+      border-bottom: 1px solid rgba(255, 215, 0, 0.25); z-index: 50;
+      backdrop-filter: blur(8px);
+    }
+    #topbar .title {
+      font-size: 18px; font-weight: 600; color: #ffd24a;
+      letter-spacing: 2px; margin-right: 24px;
+    }
+    #topbar .subtitle {
+      font-size: 12px; color: #a89070; margin-right: 24px;
+    }
+    #topbar .spacer { flex: 1; }
+
+    /* 难度切换 */
+    .diff-group {
+      display: inline-flex; gap: 4px; margin-right: 18px;
+      padding: 4px; background: rgba(255,215,0,0.08);
+      border: 1px solid rgba(255,215,0,0.25); border-radius: 6px;
+    }
+    .diff-btn {
+      padding: 5px 14px; font-size: 12px; cursor: pointer;
+      background: transparent; border: none; color: #c8a063;
+      border-radius: 4px; letter-spacing: 1px; transition: all 0.18s;
+    }
+    .diff-btn:hover { background: rgba(255,215,0,0.12); }
+    .diff-btn.active {
+      background: linear-gradient(180deg,#d4a017 0%,#a87f10 100%);
+      color: #fff; font-weight: 600;
+    }
+
+    button.tb {
+      background: rgba(28,22,18,0.6); color: #e8dcc8;
+      border: 1px solid rgba(255,215,0,0.3); border-radius: 5px;
+      padding: 6px 14px; margin-left: 6px; font-size: 12px;
+      cursor: pointer; letter-spacing: 1px; transition: all 0.18s;
+    }
+    button.tb:hover { background: rgba(255,215,0,0.15); border-color: rgba(255,215,0,0.55); }
+    button.tb.primary {
+      background: linear-gradient(180deg,#b91c1c 0%,#8a1010 100%);
+      border-color: rgba(255,215,0,0.45); color: #fff; font-weight: 600;
+    }
+    button.tb.primary:hover { background: linear-gradient(180deg,#d12626 0%,#a81212 100%); }
+    button.tb.ghost {
+      background: transparent; color: #ffd24a;
+    }
+    button.tb.active {
+      background: linear-gradient(180deg,#d4a017 0%,#a87f10 100%);
+      color: #fff; border-color: rgba(255,215,0,0.6);
+    }
+
+    /* 左侧栏 */
+    #sidebar {
+      position: fixed; top: 70px; left: 14px;
+      width: 320px; max-height: calc(100vh - 84px);
+      background: rgba(28, 22, 18, 0.92);
+      border: 1px solid rgba(255, 215, 0, 0.28); border-radius: 10px;
+      padding: 14px 16px; overflow-y: auto;
+      backdrop-filter: blur(6px); z-index: 40;
+      font-size: 13px;
+    }
+    #sidebar h2 {
+      margin: 0 0 6px; font-size: 14px; color: #ffd24a;
+      letter-spacing: 1px; border-bottom: 1px solid rgba(255,215,0,0.15);
+      padding-bottom: 5px;
+    }
+    #sidebar .level-body {
+      font-size: 11px; line-height: 1.6; color: #c8b69c;
+      margin-bottom: 12px; padding: 8px 10px;
+      background: rgba(255,215,0,0.05); border-radius: 4px;
+      border-left: 2px solid rgba(255,215,0,0.3);
+    }
+    #sidebar .diff-tip {
+      font-size: 11px; color: #c8a063; margin-bottom: 10px;
+      padding: 6px 8px; background: rgba(212,160,23,0.1);
+      border: 1px dashed rgba(212,160,23,0.3); border-radius: 4px;
+    }
+
+    /* 零件列表 */
+    .piece-row {
+      list-style: none; padding: 8px 10px; margin-bottom: 6px;
+      background: #2c211c; border: 1px solid transparent;
+      border-radius: 5px; cursor: pointer; transition: all 0.15s;
+    }
+    .piece-row:hover { background: #3a2c24; border-color: rgba(255,215,0,0.2); }
+    .piece-row.selected {
+      background: rgba(255,215,0,0.12); border-color: rgba(255,215,0,0.55);
+    }
+    .piece-row.anchor {
+      background: linear-gradient(90deg, rgba(212,160,23,0.1) 0%, #2c211c 60%);
+      border-left: 3px solid #ffd24a;
+    }
+    .piece-row.anchor.selected {
+      background: linear-gradient(90deg, rgba(212,160,23,0.25) 0%, rgba(255,215,0,0.12) 60%);
+    }
+    .anchor-badge {
+      display: inline-block; width: 18px; height: 18px; line-height: 18px;
+      text-align: center; font-size: 11px; font-weight: 700;
+      color: #1a1612; background: #ffd24a; border-radius: 3px;
+      margin-right: 4px; vertical-align: 1px;
+    }
+    .row-main {
+      display: flex; justify-content: space-between; align-items: center;
+      margin-bottom: 5px;
+    }
+    .row-name { font-size: 12px; font-weight: 500; color: #e8dcc8; }
+    .row-status { font-size: 10px; font-family: monospace; color: #88766c; }
+    .row-bar {
+      height: 4px; background: rgba(255,255,255,0.08); border-radius: 2px;
+      overflow: hidden;
+    }
+    .row-bar-fill {
+      height: 100%; width: 0%; background: #88766c;
+      transition: width 0.25s, background 0.25s;
+    }
+
+    /* 精调面板 */
+    #tweak-panel {
+      position: fixed; bottom: 14px; left: 14px;
+      width: 320px;
+      background: rgba(28,22,18,0.94); border: 1px solid rgba(255,215,0,0.35);
+      border-radius: 10px; padding: 14px 16px; backdrop-filter: blur(6px);
+      z-index: 45; font-size: 12px; display: none;
+    }
+    #tweak-title { font-size: 13px; color: #ffd24a; margin-bottom: 4px; font-weight: 600; }
+    #tweak-lore  { font-size: 11px; color: #a89070; margin-bottom: 10px; line-height: 1.5; }
+
+    .tweak-error {
+      display: flex; gap: 12px; padding: 6px 8px;
+      background: rgba(255,215,0,0.06); border-radius: 4px;
+      margin-bottom: 10px; font-size: 11px;
+    }
+    .tweak-error span { font-family: monospace; }
+    .tweak-error label { color: #a89070; margin-right: 4px; }
+
+    .tweak-row {
+      display: flex; align-items: center; gap: 3px; margin-bottom: 4px;
+      font-size: 11px;
+    }
+    .tweak-row .tweak-label { width: 38px; color: #a89070; font-size: 10px; flex-shrink: 0; }
+    .tweak-row .tweak-axis  { width: 14px; color: #ffd24a; font-weight: 700; text-align: center; flex-shrink: 0; }
+    .tweak-row input {
+      width: 60px; padding: 3px 5px; font-size: 11px; text-align: center;
+      background: #2c211c; border: 1px solid rgba(255,215,0,0.18);
+      color: #e8dcc8; border-radius: 3px; font-family: monospace;
+    }
+    .tweak-row button {
+      padding: 3px 6px; font-size: 10px; min-width: 28px;
+      background: #3a2c24; border: 1px solid rgba(255,215,0,0.18);
+      color: #e8dcc8; border-radius: 3px; cursor: pointer;
+    }
+    .tweak-row button:hover { background: #4a3830; }
+
+    .tweak-actions {
+      display: flex; gap: 6px; margin-top: 10px;
+      padding-top: 10px; border-top: 1px solid rgba(255,215,0,0.15);
+    }
+    .tweak-actions button { flex: 1; }
+
+    /* 提示 */
+    #help-tip {
+      position: fixed; bottom: 14px; right: 14px;
+      background: rgba(28,22,18,0.92); border: 1px solid rgba(255,215,0,0.32);
+      border-radius: 8px; padding: 12px 16px; font-size: 13px;
+      color: #c8b69c; line-height: 1.85; z-index: 30; max-width: 380px;
+      box-shadow: 0 4px 14px rgba(0,0,0,0.4);
+    }
+    #help-tip .help-title {
+      font-size: 12px; color: #ffd24a; margin-bottom: 6px; letter-spacing: 1px;
+      display: flex; justify-content: space-between; align-items: center;
+    }
+    #help-tip kbd {
+      background: #3a2c24; border: 1px solid rgba(255,215,0,0.35);
+      border-radius: 4px; padding: 2px 8px; font-family: monospace;
+      font-size: 12px; color: #ffd24a; font-weight: 600;
+      box-shadow: inset 0 -1px 0 rgba(0,0,0,0.4);
+      margin: 0 2px;
+    }
+    #btn-help {
+      background: transparent; border: 1px solid rgba(255,215,0,0.4);
+      color: #ffd24a; padding: 1px 8px; font-size: 11px; cursor: pointer;
+      border-radius: 3px;
+    }
+    #btn-help:hover { background: rgba(255,215,0,0.12); }
+
+    /* 入场弹窗 */
+    #intro-modal {
+      position: fixed; inset: 0; z-index: 300;
+      display: none; align-items: center; justify-content: center;
+      background: rgba(0,0,0,0.72); backdrop-filter: blur(8px);
+    }
+    #intro-modal.show { display: flex; }
+    .intro-inner {
+      width: 580px; max-width: calc(100vw - 32px);
+      max-height: calc(100vh - 60px); overflow-y: auto;
+      padding: 28px 32px;
+      background: linear-gradient(180deg, #2c211c 0%, #1a1612 100%);
+      border: 2px solid rgba(255,215,0,0.5); border-radius: 14px;
+      box-shadow: 0 0 60px rgba(255,215,0,0.2);
+    }
+    .intro-title {
+      font-size: 22px; color: #ffd24a; font-weight: 700; letter-spacing: 4px;
+      text-align: center; margin-bottom: 4px;
+    }
+    .intro-sub {
+      font-size: 12px; color: #a89070; text-align: center;
+      letter-spacing: 2px; margin-bottom: 22px;
+    }
+    .intro-section {
+      margin-bottom: 16px; padding: 12px 16px;
+      background: rgba(255,215,0,0.05);
+      border-left: 3px solid rgba(255,215,0,0.4);
+      border-radius: 4px;
+    }
+    .intro-section h4 {
+      margin: 0 0 6px; font-size: 13px; color: #ffd24a; letter-spacing: 1px;
+    }
+    .intro-section p, .intro-section li {
+      margin: 0; font-size: 13px; line-height: 1.85; color: #d4c4ac;
+    }
+    .intro-section ul { margin: 0; padding-left: 18px; }
+    .intro-section kbd {
+      background: #3a2c24; border: 1px solid rgba(255,215,0,0.35);
+      border-radius: 4px; padding: 2px 8px; font-family: monospace;
+      font-size: 12px; color: #ffd24a; font-weight: 600; margin: 0 2px;
+    }
+    .intro-grid {
+      display: grid; grid-template-columns: 130px 1fr; gap: 8px 14px;
+      font-size: 13px;
+    }
+    .intro-grid .k { color: #ffd24a; font-weight: 500; text-align: right; }
+    .intro-grid .v { color: #d4c4ac; }
+    .intro-actions {
+      display: flex; align-items: center; justify-content: space-between;
+      margin-top: 22px; padding-top: 16px;
+      border-top: 1px solid rgba(255,215,0,0.18);
+    }
+    .intro-skip-label {
+      font-size: 12px; color: #a89070; cursor: pointer;
+      display: inline-flex; align-items: center; gap: 6px;
+    }
+    .intro-skip-label input { cursor: pointer; }
+    #intro-start {
+      padding: 10px 36px; font-size: 14px; cursor: pointer;
+      background: linear-gradient(180deg, #d4a017 0%, #a87f10 100%);
+      color: #fff; border: none; border-radius: 6px;
+      letter-spacing: 4px; font-weight: 600;
+      box-shadow: 0 4px 14px rgba(212,160,23,0.35);
+    }
+    #intro-start:hover {
+      background: linear-gradient(180deg, #e8b020 0%, #b88f15 100%);
+    }
+
+    /* 状态条 */
+    #status {
+      position: fixed; top: 64px; right: 14px;
+      font-size: 11px; color: #9bcc9b; z-index: 35;
+      background: rgba(28,22,18,0.7); padding: 4px 10px; border-radius: 4px;
+    }
+
+    /* Toast */
+    .toast {
+      position: fixed; top: 80px; left: 50%; transform: translateX(-50%) translateY(-20px);
+      padding: 10px 22px; background: rgba(28,22,18,0.95);
+      color: #e8dcc8; font-size: 13px; border-radius: 6px;
+      border: 1px solid rgba(255,215,0,0.4); pointer-events: none;
+      opacity: 0; transition: all 0.25s; z-index: 100;
+    }
+    .toast.show { opacity: 1; transform: translateX(-50%) translateY(0); }
+    .toast.ok   { border-color: rgba(155,204,155,0.7); color: #c8e8c8; }
+    .toast.warn { border-color: rgba(255,210,74,0.7); color: #ffd24a; }
+
+    /* 结果卡 */
+    #result-card {
+      position: fixed; inset: 0; z-index: 200;
+      display: none; align-items: center; justify-content: center;
+      background: rgba(0,0,0,0.65); backdrop-filter: blur(6px);
+    }
+    #result-card.show { display: flex; }
+    .result-inner {
+      width: 360px; padding: 32px 28px;
+      background: linear-gradient(180deg, #2c211c 0%, #1a1612 100%);
+      border: 2px solid rgba(255,215,0,0.5); border-radius: 12px;
+      text-align: center;
+      box-shadow: 0 0 60px rgba(255,215,0,0.25);
+    }
+    .grade {
+      font-size: 88px; font-weight: 800; line-height: 1; margin: 8px 0;
+      letter-spacing: 4px; font-family: "Times New Roman", serif;
+      text-shadow: 0 0 20px currentColor;
+    }
+    .grade-s { color: #ffd24a; }
+    .grade-a { color: #9bcc9b; }
+    .grade-b { color: #c8a063; }
+    .grade-c { color: #d4a017; }
+    .grade-f { color: #e87878; }
+    .result-score-line { font-size: 14px; color: #a89070; margin-bottom: 6px; }
+    .result-score { font-size: 32px; color: #e8dcc8; font-weight: 600; }
+    .result-meta { font-size: 12px; color: #a89070; margin: 8px 0 18px; }
+    #result-close {
+      padding: 10px 32px; background: linear-gradient(180deg,#d4a017 0%,#a87f10 100%);
+      color: #fff; border: none; border-radius: 6px; font-size: 13px;
+      cursor: pointer; letter-spacing: 2px;
+    }
+
+    /* 滚动条美化 */
+    #sidebar::-webkit-scrollbar { width: 6px; }
+    #sidebar::-webkit-scrollbar-thumb { background: rgba(255,215,0,0.25); border-radius: 3px; }
+  </style>
+</head>
+<body>
+  <div id="app"></div>
+
+  <!-- 顶部 -->
+  <div id="topbar">
+    <span class="title">精微匠造</span>
+    <span class="subtitle" id="level-subtitle">—</span>
+    <div class="spacer"></div>
+    <div class="diff-group">
+      <button class="diff-btn"            data-diff="easy">容易</button>
+      <button class="diff-btn active"     data-diff="normal">普通</button>
+      <button class="diff-btn"            data-diff="strict">严格</button>
+    </div>
+    <button class="tb ghost"   id="btn-axes">显示坐标轴 (X)</button>
+    <button class="tb"         id="btn-reset-cam">重置机位 (V)</button>
+    <button class="tb"         id="btn-validate">校验当前件 (Enter)</button>
+    <button class="tb primary" id="btn-grade">提交评分</button>
+    <button class="tb ghost"   id="btn-back">← 返回</button>
+  </div>
+
+  <!-- 左侧 -->
+  <div id="sidebar">
+    <h2 id="level-title">—</h2>
+    <div class="level-body" id="level-body">—</div>
+    <div class="diff-tip" id="diff-tip">—</div>
+    <h2>零件清单</h2>
+    <ul id="piece-list" style="list-style:none;padding:0;margin:0;"></ul>
+  </div>
+
+  <!-- 精调面板 -->
+  <div id="tweak-panel">
+    <div id="tweak-title">精调</div>
+    <div id="tweak-lore"></div>
+
+    <div class="tweak-error">
+      <div><label>位置差</label><span id="err-pos">—</span></div>
+      <div><label>角度差</label><span id="err-rot">—</span></div>
+    </div>
+
+    <div class="tweak-row">
+      <span class="tweak-label">位置 m</span>
+      <span class="tweak-axis">X</span>
+      <button data-step="-0.5">-0.5</button>
+      <button data-step="-0.05">-</button>
+      <input id="tw-px" type="number" step="0.05" />
+      <button data-step="0.05">+</button>
+      <button data-step="0.5">+0.5</button>
+    </div>
+    <div class="tweak-row">
+      <span class="tweak-label"></span>
+      <span class="tweak-axis">Y</span>
+      <button data-step="-0.5">-0.5</button>
+      <button data-step="-0.05">-</button>
+      <input id="tw-py" type="number" step="0.05" />
+      <button data-step="0.05">+</button>
+      <button data-step="0.5">+0.5</button>
+    </div>
+    <div class="tweak-row">
+      <span class="tweak-label"></span>
+      <span class="tweak-axis">Z</span>
+      <button data-step="-0.5">-0.5</button>
+      <button data-step="-0.05">-</button>
+      <input id="tw-pz" type="number" step="0.05" />
+      <button data-step="0.05">+</button>
+      <button data-step="0.5">+0.5</button>
+    </div>
+
+    <div class="tweak-row" style="margin-top:8px;">
+      <span class="tweak-label">旋转 °</span>
+      <span class="tweak-axis">X</span>
+      <button data-step="-15">-15</button>
+      <button data-step="-1">-</button>
+      <input id="tw-rx" type="number" step="1" />
+      <button data-step="1">+</button>
+      <button data-step="15">+15</button>
+    </div>
+    <div class="tweak-row">
+      <span class="tweak-label"></span>
+      <span class="tweak-axis">Y</span>
+      <button data-step="-15">-15</button>
+      <button data-step="-1">-</button>
+      <input id="tw-ry" type="number" step="1" />
+      <button data-step="1">+</button>
+      <button data-step="15">+15</button>
+    </div>
+    <div class="tweak-row">
+      <span class="tweak-label"></span>
+      <span class="tweak-axis">Z</span>
+      <button data-step="-15">-15</button>
+      <button data-step="-1">-</button>
+      <input id="tw-rz" type="number" step="1" />
+      <button data-step="1">+</button>
+      <button data-step="15">+15</button>
+    </div>
+
+    <div class="tweak-actions">
+      <button class="tb ghost" id="btn-return-dock">回备料架</button>
+      <button class="tb"       id="btn-snap">⚡ 一键对齐</button>
+    </div>
+  </div>
+
+  <!-- 帮助提示 -->
+  <div id="help-tip">
+    <div class="help-title">
+      <span>快捷键</span>
+      <button id="btn-help">详细说明</button>
+    </div>
+    <kbd>↑↓←→</kbd> 平移 0.1m · <kbd>PgUp</kbd><kbd>PgDn</kbd> 升降<br/>
+    <kbd>W</kbd><kbd>E</kbd> 绕 Y 轴旋转 ±5° · <kbd>Shift</kbd> 步长×3<br/>
+    <kbd>M</kbd> gizmo 模式 · <kbd>Enter</kbd> 校验 · <kbd>X</kbd> 坐标轴 · <kbd>V</kbd> 机位
+  </div>
+
+  <!-- 入场弹窗 -->
+  <div id="intro-modal">
+    <div class="intro-inner">
+      <div class="intro-title">精微匠造</div>
+      <div class="intro-sub">PRECISION FORGING · 键鼠精调模式</div>
+
+      <div class="intro-section">
+        <h4>玩法</h4>
+        <p>场景中有 <strong>6 个斗拱组件</strong>散落在备料架上，你的任务是把它们正确拼装成一座万春亭斗拱。</p>
+        <p style="margin-top:8px;">第一步：先选中带 <span style="color:#ffd24a;font-weight:600;">锚</span> 标记的「集合陆 · 木栓」，点 <strong>⚡ 一键对齐</strong>，让它落到目标位置——这就是你的「拼装基准」。</p>
+        <p style="margin-top:8px;">第二步：把其余 5 件按相对锚点的位置摆放即可。系统按<strong>各部件之间的相对位姿</strong>给分（位置 + 朝向），所以你在哪里拼装都行，只要相对关系正确。</p>
+      </div>
+
+      <div class="intro-section">
+        <h4>选中零件</h4>
+        <p>左侧清单点击 · 或在 3D 场景里直接<strong>鼠标点击</strong>该零件。选中后会出现金色坐标轴 (gizmo) 和左下角的精调面板。</p>
+      </div>
+
+      <div class="intro-section">
+        <h4>调整方式（任选）</h4>
+        <ul>
+          <li><strong>鼠标拖拽 gizmo</strong> — 粗调三轴；按 <kbd>M</kbd> 切换平移/旋转</li>
+          <li><strong>键盘</strong> — 见下方快捷键表</li>
+          <li><strong>精调面板数值</strong> — 直接输入或 ± 步进按钮，亚毫米精度</li>
+        </ul>
+      </div>
+
+      <div class="intro-section">
+        <h4>快捷键</h4>
+        <div class="intro-grid">
+          <span class="k"><kbd>↑</kbd><kbd>↓</kbd><kbd>←</kbd><kbd>→</kbd></span>
+          <span class="v">XZ 平面平移 0.1m（Shift = 0.5m）</span>
+          <span class="k"><kbd>PgUp</kbd><kbd>PgDn</kbd></span>
+          <span class="v">Y 轴升降 0.1m（Shift = 0.5m）</span>
+          <span class="k"><kbd>W</kbd><kbd>E</kbd></span>
+          <span class="v">绕 Y 轴旋转 ±5°（Shift = ±15°）— W 顺时针，E 逆时针</span>
+          <span class="k"><kbd>M</kbd></span>
+          <span class="v">切换 gizmo 平移 / 旋转模式</span>
+          <span class="k"><kbd>Enter</kbd></span>
+          <span class="v">校验当前选中零件</span>
+          <span class="k"><kbd>X</kbd></span>
+          <span class="v">显示 / 隐藏三色坐标轴（gizmo 箭头 + 世界原点轴），关闭后画面更干净</span>
+          <span class="k"><kbd>V</kbd></span>
+          <span class="v">复位摄像机到默认机位</span>
+          <span class="k"><kbd>Esc</kbd></span>
+          <span class="v">取消当前选中</span>
+        </div>
+      </div>
+
+      <div class="intro-section">
+        <h4>难度与评分</h4>
+        <p>顶部可切换 <strong>容易</strong>（20cm/15°）· <strong>普通</strong>（10cm/8°）· <strong>严格</strong>（3cm/2°）。位置 + 角度均达标的零件计入分数；点 <strong>提交评分</strong> 查看综合等级。</p>
+      </div>
+
+      <div class="intro-actions">
+        <label class="intro-skip-label">
+          <input type="checkbox" id="intro-skip" />
+          下次不再提示（可点右下角"详细说明"再看）
+        </label>
+        <button id="intro-start">开始打磨</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- 状态 -->
+  <div id="status">就绪</div>
+
+  <!-- Toast -->
+  <div id="toast" class="toast"></div>
+
+  <!-- 结果卡 -->
+  <div id="result-card">
+    <div class="result-inner">
+      <div class="result-score-line">本次评分</div>
+      <div class="grade" id="result-grade">—</div>
+      <div class="result-score"><span id="result-score">—</span><span style="font-size:18px;color:#a89070;"> / 100</span></div>
+      <div class="result-meta" id="result-meta">—</div>
+      <button id="result-close">继续打磨</button>
+    </div>
+  </div>
+
+  <script type="module" src="/src/precision/main.js"></script>
+</body>
+</html>

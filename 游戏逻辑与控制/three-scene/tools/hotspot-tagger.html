@@ -1,0 +1,980 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8" />
+  <title>Mockup 热区调整工具</title>
+  <style>
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    html, body { width: 100%; height: 100%; background: #1a140a; color: #e8d8b0; font-family: 'Segoe UI','Microsoft YaHei',sans-serif; overflow: hidden; }
+
+    /* ============ 顶部 Tab 栏 ============ */
+    .tabs { display: flex; align-items: center; gap: 4px; background: #1d160a; border-bottom: 1px solid #4a3a1c; padding: 8px 14px; height: 48px; }
+    .tabs h1 { font-size: 14px; letter-spacing: .15em; color: #f5b94a; margin-right: 24px; flex-shrink: 0; }
+    .tabs .tab { background: #2c2010; color: #e8d8b0; border: 1px solid #6a5238; padding: 6px 14px; font-size: 12px; cursor: pointer; border-radius: 4px; user-select: none; }
+    .tabs .tab:hover { background: #3a2c14; border-color: #f5b94a; color: #f5b94a; }
+    .tabs .tab.active { background: #f5b94a; color: #14100a; border-color: #f5b94a; font-weight: bold; }
+    .tabs .spacer { flex: 1; }
+    .tabs .stats { font-size: 11px; color: #c9b58a; font-family: ui-monospace, monospace; }
+
+    /* ============ 三栏布局 ============ */
+    .layout { display: grid; grid-template-columns: 260px 1fr 300px; height: calc(100vh - 48px); }
+    .sidebar { background: #20180c; border-right: 1px solid #4a3a1c; overflow-y: auto; padding: 12px; }
+    .stage   { position: relative; background: #14100a; overflow: hidden; }
+    .panel   { background: #20180c; border-left: 1px solid #4a3a1c; overflow-y: auto; padding: 12px; }
+
+    h2 { font-size: 12px; letter-spacing: .12em; color: #f5b94a; margin-bottom: 8px; padding-bottom: 4px; border-bottom: 1px solid #4a3a1c; }
+    .hint { font-size: 11px; color: #c9b58a; line-height: 1.6; margin-bottom: 8px; }
+    .hint code { background: #2c2010; padding: 1px 4px; border-radius: 2px; color: #f5b94a; font-size: 10px; }
+
+    /* ============ 热区列表 ============ */
+    .hlist { display: flex; flex-direction: column; gap: 3px; }
+    .hitem { display: flex; align-items: center; gap: 6px; padding: 6px 8px; border: 1px solid #3a2c14; border-radius: 4px; cursor: pointer; font-size: 12px; user-select: none; }
+    .hitem:hover { background: #2c2010; border-color: #6a5238; }
+    .hitem.active { background: #3a2c14; border-color: #f5b94a; box-shadow: 0 0 0 1px #f5b94a inset; }
+    .hitem.nav { border-left: 3px solid #44a3ff; }
+    .hitem .badge { font-size: 9px; padding: 1px 5px; border-radius: 2px; background: #2c2010; color: #c9b58a; flex-shrink: 0; letter-spacing: .05em; }
+    .hitem .badge.nav   { background: #1a3050; color: #88bfff; }
+    .hitem .badge.page  { background: #1a3a1a; color: #88dd88; }
+    .hitem .badge.act   { background: #3a2a1a; color: #ffaa66; }
+    .hitem .badge.toast { background: #2a1a3a; color: #cc99ff; }
+    .hitem .name { flex: 1; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+
+    /* ============ 工具按钮 ============ */
+    .toolbar { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 10px; }
+    button.t { background: #2c2010; color: #e8d8b0; border: 1px solid #6a5238; padding: 5px 10px; font-size: 11px; cursor: pointer; border-radius: 3px; }
+    button.t:hover { background: #3a2c14; border-color: #f5b94a; color: #f5b94a; }
+    button.t.danger { color: #ff8866; border-color: #884d3a; }
+    button.t.danger:hover { background: #3a1a14; }
+    button.t.primary { background: #f5b94a; color: #14100a; border-color: #f5b94a; font-weight: bold; }
+    button.t.primary:hover { background: #ffd070; }
+
+    /* ============ 舞台 ============ */
+    .stage-inner { position: absolute; inset: 0; display: grid; place-items: center; padding: 16px; cursor: grab; }
+    .stage-inner.panning { cursor: grabbing; }
+    .map-wrap {
+      position: relative; max-width: 100%; max-height: 100%;
+      transform-origin: 0 0;
+      transition: transform .04s linear;
+      will-change: transform;
+    }
+    .map-wrap img { display: block; max-width: 100%; max-height: calc(100vh - 80px); user-select: none; -webkit-user-drag: none; }
+
+    /* ============ 矩形 ============ */
+    .rect {
+      position: absolute;
+      border: 2px solid rgba(245,185,74,0.7);
+      background: rgba(245,185,74,0.12);
+      box-sizing: border-box;
+      cursor: move;
+      z-index: 5;
+    }
+    .rect.nav { border-color: rgba(68,163,255,0.7); background: rgba(68,163,255,0.10); }
+    .rect:hover { border-width: 2px; box-shadow: 0 0 0 1px rgba(255,255,255,0.3) inset; }
+    .rect.active {
+      border-color: #ff6644;
+      background: rgba(255,102,68,0.18);
+      z-index: 10;
+      box-shadow: 0 0 0 1px #fff inset, 0 0 8px rgba(255,102,68,0.5);
+    }
+    .rect .rect-label {
+      position: absolute; top: -22px; left: -2px;
+      background: rgba(20,16,10,0.92); color: #f5b94a;
+      padding: 2px 6px; font-size: 10px; line-height: 1.2;
+      border: 1px solid #4a3a1c; border-radius: 2px;
+      white-space: nowrap; pointer-events: none;
+      letter-spacing: .05em;
+    }
+    .rect.active .rect-label { background: #ff6644; color: #fff; border-color: #ff6644; font-weight: bold; }
+
+    /* ============ 缩放/拉伸把手 ============ */
+    .handle {
+      position: absolute; width: 10px; height: 10px;
+      background: #fff; border: 1px solid #ff6644;
+      box-sizing: border-box;
+      z-index: 11;
+    }
+    .rect:not(.active) .handle { display: none; }
+    .h-nw { left: -5px; top: -5px; cursor: nw-resize; }
+    .h-ne { right: -5px; top: -5px; cursor: ne-resize; }
+    .h-sw { left: -5px; bottom: -5px; cursor: sw-resize; }
+    .h-se { right: -5px; bottom: -5px; cursor: se-resize; }
+    .h-n  { left: 50%; top: -5px; transform: translateX(-50%); cursor: n-resize; }
+    .h-s  { left: 50%; bottom: -5px; transform: translateX(-50%); cursor: s-resize; }
+    .h-w  { left: -5px; top: 50%; transform: translateY(-50%); cursor: w-resize; }
+    .h-e  { right: -5px; top: 50%; transform: translateY(-50%); cursor: e-resize; }
+
+    /* ============ HUD ============ */
+    .hud-coord { position: absolute; bottom: 10px; left: 10px; background: rgba(20,16,10,0.85); border: 1px solid #4a3a1c; padding: 5px 8px; font-family: ui-monospace, monospace; font-size: 11px; color: #c9b58a; z-index: 50; pointer-events: none; }
+    .hud-coord b { color: #f5b94a; }
+
+    .zoom-bar { position: absolute; top: 10px; right: 10px; display: flex; gap: 3px; background: rgba(20,16,10,0.92); border: 1px solid #4a3a1c; border-radius: 3px; padding: 3px; z-index: 50; }
+    .zoom-bar button { background: #2c2010; color: #e8d8b0; border: 1px solid #6a5238; width: 26px; height: 22px; font-size: 12px; cursor: pointer; border-radius: 2px; display: flex; align-items: center; justify-content: center; }
+    .zoom-bar button:hover { background: #3a2c14; border-color: #f5b94a; color: #f5b94a; }
+    .zoom-bar .zlabel { color: #f5b94a; font-family: ui-monospace, monospace; font-size: 11px; padding: 0 6px; display: flex; align-items: center; min-width: 42px; justify-content: center; }
+
+    /* ============ 右侧编辑器 ============ */
+    .editor { display: flex; flex-direction: column; gap: 8px; }
+    .editor .row { display: grid; grid-template-columns: 50px 1fr; gap: 6px; align-items: center; font-size: 11px; }
+    .editor .row label { color: #c9b58a; letter-spacing: .1em; }
+    .editor .row input, .editor .row select {
+      width: 100%; padding: 4px 6px; background: #14100a; border: 1px solid #4a3a1c;
+      color: #e8d8b0; font-size: 11px; font-family: ui-monospace, monospace; border-radius: 2px;
+    }
+    .editor .row input:focus { border-color: #f5b94a; outline: none; }
+    .editor .row .num4 { display: grid; grid-template-columns: repeat(4, 1fr); gap: 4px; }
+
+    .readonly-info {
+      background: #14100a; border: 1px solid #4a3a1c; padding: 6px 8px; font-size: 11px;
+      color: #c9b58a; font-family: ui-monospace, monospace; border-radius: 2px;
+      word-break: break-all;
+    }
+
+    .json-out { width: 100%; min-height: 220px; background: #14100a; color: #e8d8b0; border: 1px solid #4a3a1c; padding: 8px; font-family: ui-monospace, monospace; font-size: 10px; line-height: 1.5; resize: vertical; word-break: break-all; }
+
+    .meta { font-size: 10px; color: #6a5238; margin-top: 6px; line-height: 1.5; }
+    .meta code { background: #2c2010; padding: 1px 3px; border-radius: 2px; color: #c9b58a; }
+
+    .loading { position: absolute; inset: 0; display: grid; place-items: center; color: #c9b58a; font-size: 13px; letter-spacing: .15em; z-index: 100; }
+    .err { color: #ff8866; }
+
+    .empty-tip { color: #6a5238; font-size: 11px; text-align: center; padding: 16px; }
+  </style>
+</head>
+<body>
+
+<!-- ========== 顶部 Tab 栏 ========== -->
+<div class="tabs">
+  <h1>HOTSPOT TAGGER</h1>
+  <button class="tab active" data-page="home">首页</button>
+  <button class="tab" data-page="catalog">万象</button>
+  <button class="tab" data-page="appreciation">鉴赏</button>
+  <button class="tab" data-page="detail">详情</button>
+  <button class="tab" data-page="collection">藏阁</button>
+  <button class="tab" data-page="map">舆图</button>
+  <span class="spacer"></span>
+  <span class="stats" id="stats">— —</span>
+</div>
+
+<div class="layout">
+
+  <!-- ========== 左：热区列表 ========== -->
+  <aside class="sidebar">
+    <h2>当前页热区</h2>
+    <div class="hint">
+      · 蓝边 <code>NAV</code> = 顶部 6 路由（每页布局独立可调）<br/>
+      · 单击 = 选中 · 拖动矩形 = 移动 · 拖角/边 = 缩放<br/>
+      · ↑↓←→ 微调 0.1% · <kbd>Shift</kbd>+方向 = 1%<br/>
+      · <kbd>Del</kbd> 删除（NAV 不可删）· <kbd>Esc</kbd> 取消
+    </div>
+    <div class="hlist" id="hlist"></div>
+
+    <div class="toolbar">
+      <button class="t" id="btn-reload">从 portal-main.js 重载</button>
+      <button class="t danger" id="btn-delete">删除选中</button>
+    </div>
+  </aside>
+
+  <!-- ========== 中：舞台 ========== -->
+  <main class="stage" id="stage">
+    <div class="loading" id="loading">正在从 <code>/index.html</code> 提取 mockup PNG …</div>
+    <div class="stage-inner" id="stage-inner" style="display:none;">
+      <div class="map-wrap" id="map-wrap">
+        <img id="map-img" alt="mockup" />
+      </div>
+    </div>
+    <div class="hud-coord" id="hud-coord" style="display:none;">
+      鼠标 <b id="hud-x">--</b>%, <b id="hud-y">--</b>%
+    </div>
+    <div class="zoom-bar" id="zoom-bar" style="display:none;">
+      <button id="btn-zoom-out" title="缩小（−）">−</button>
+      <button id="btn-zoom-reset" title="复位（0）">⟳</button>
+      <button id="btn-zoom-in" title="放大（+）">+</button>
+      <span class="zlabel" id="zoom-label">100%</span>
+    </div>
+  </main>
+
+  <!-- ========== 右：编辑器 + 导出 ========== -->
+  <aside class="panel">
+    <h2>编辑选中热区</h2>
+    <div class="editor" id="editor">
+      <div class="empty-tip">未选中任何热区<br/>左侧列表点击 / 中区单击矩形</div>
+    </div>
+
+    <h2 style="margin-top:14px;">导出（替换 portal-main.js 的 NAV_ROUTES / NAV_LAYOUTS / SPOTS 三段）</h2>
+    <div class="toolbar" style="margin-top:0;margin-bottom:6px;">
+      <button class="t primary" id="btn-export">生成代码</button>
+      <button class="t" id="btn-copy">复制</button>
+      <button class="t" id="btn-download">下载</button>
+    </div>
+    <textarea class="json-out" id="json-out" readonly></textarea>
+    <div class="meta">
+      自动保存：<code>localStorage["hotspot-edits-v2"]</code><br/>
+      NAV 拆为 <code>NAV_ROUTES</code>（路由共享）+ <code>NAV_LAYOUTS</code>（每页布局独立）<br/>
+      在哪页拖动 NAV 矩形，只影响该页 PNG 上的点击位置；跳转目标始终复用 NAV_ROUTES。
+    </div>
+  </aside>
+</div>
+
+<script type="module">
+// ============================================================
+// 状态：NAV 拆为「路由共享」+「每页布局独立」+「每页特有热区」
+// ============================================================
+const PAGES = ['home', 'catalog', 'appreciation', 'detail', 'collection', 'map'];
+const PAGE_TITLE = { home:'首页', catalog:'万象', appreciation:'鉴赏', detail:'详情', collection:'藏阁', map:'舆图' };
+
+// 数据模型：
+//   data.navRoutes:  [{ name, _kind, _target }]                  6 条路由，所有页共享，名称/跳转不可改
+//   data.navLayouts: { home:[{x,y,w,h}*6], catalog:[...], ... }  每页独立的 6 个矩形位置
+//   data.specific[page]: [{ name, _kind, _target, x, y, w, h }]  每页特有的非 NAV 热区
+let data = { navRoutes: [], navLayouts: {}, specific: {} };
+PAGES.forEach((p) => { data.specific[p] = []; data.navLayouts[p] = []; });
+
+let currentPage = 'home';
+let activeKey = null; // "nav:idx"（操作当前页 NAV 第 idx 项的布局）或 "page:idx"
+let mapImg = null;
+
+const LS_KEY = 'hotspot-edits-v2';
+
+// 缩放/平移
+const view = { s: 1, tx: 0, ty: 0 };
+const ZOOM_MIN = 0.4, ZOOM_MAX = 8;
+let panState = null;
+const CLICK_DRAG_THRESHOLD = 4;
+
+// 拖拽矩形
+let rectDrag = null; // { kind: 'move'|'resize-nw'|..., key, baseX, baseY, baseW, baseH, mouseStartX, mouseStartY }
+
+// ============================================================
+// 启动：从 /index.html 抓所有 mockup base64，从 portal-main.js 抓 SPOTS
+// ============================================================
+const MOCKUP_IMG = {};
+
+async function loadMockups() {
+  const res = await fetch('/index.html');
+  const html = await res.text();
+  for (const p of PAGES) {
+    const re = new RegExp(`${p}:\\s*"(data:image\\/[^"]+)"`);
+    const m = html.match(re);
+    if (m) MOCKUP_IMG[p] = m[1];
+  }
+  if (!MOCKUP_IMG.home) throw new Error('未在 index.html 提取到任何 MOCKUP_IMG');
+}
+
+async function loadSpotsFromSource() {
+  const res = await fetch('/src/portal/portal-main.js');
+  const txt = await res.text();
+
+  // -------- NAV_ROUTES（新结构，无坐标）--------
+  let routesM = txt.match(/const\s+NAV_ROUTES\s*=\s*\[([\s\S]*?)\];/);
+  if (routesM) {
+    data.navRoutes = parseRoutes(routesM[1]);
+  } else {
+    // 老结构兼容：从 const NAV = [...] 抽路由信息
+    const oldNavM = txt.match(/const\s+NAV\s*=\s*\[([\s\S]*?)\];/);
+    if (!oldNavM) throw new Error('未找到 NAV_ROUTES 或 NAV');
+    const items = parseHotspots(oldNavM[1]);
+    data.navRoutes = items.map((h) => ({ name: h.name, _kind: h._kind, _target: h._target }));
+  }
+  if (data.navRoutes.length !== 6) {
+    console.warn('NAV_ROUTES 长度不为 6:', data.navRoutes.length);
+  }
+
+  // -------- NAV_LAYOUTS（每页独立布局）--------
+  // 优先用新结构里的 NAV_LAYOUTS = { home: [...], ... }
+  // 否则把老 NAV 的 (x,y,w,h) 复制到 6 页作默认值
+  const layoutsM = txt.match(/const\s+NAV_LAYOUTS\s*=\s*\{([\s\S]*?)\n\};/);
+  if (layoutsM) {
+    for (const p of PAGES) {
+      const re = new RegExp(`${p}:\\s*(_NAV_DEFAULT|\\[([\\s\\S]*?)\\])`, 'm');
+      const m = layoutsM[1].match(re);
+      if (m) {
+        if (m[1] === '_NAV_DEFAULT') {
+          // 占位符，等下用 _NAV_DEFAULT 解析后填
+          data.navLayouts[p] = '__USE_DEFAULT__';
+        } else {
+          data.navLayouts[p] = parseLayoutArray(m[2]);
+        }
+      }
+    }
+    // 解析 _NAV_DEFAULT
+    const defM = txt.match(/const\s+_NAV_DEFAULT\s*=\s*\[([\s\S]*?)\];/);
+    const defLayout = defM ? parseLayoutArray(defM[1]) : [];
+    for (const p of PAGES) {
+      if (data.navLayouts[p] === '__USE_DEFAULT__') {
+        data.navLayouts[p] = defLayout.map((o) => ({ ...o })); // 深拷贝
+      }
+    }
+  } else {
+    // 老结构：从 const NAV 直接抽位置，6 页都用同一份
+    const oldNavM = txt.match(/const\s+NAV\s*=\s*\[([\s\S]*?)\];/);
+    if (oldNavM) {
+      const items = parseHotspots(oldNavM[1]);
+      const flat = items.map((h) => ({ x: h.x, y: h.y, w: h.w, h: h.h }));
+      for (const p of PAGES) data.navLayouts[p] = flat.map((o) => ({ ...o }));
+    }
+  }
+
+  // -------- SPOTS（每页 page-specific）--------
+  const spotsM = txt.match(/const\s+SPOTS\s*=\s*\{([\s\S]*?)\n\};/);
+  if (!spotsM) throw new Error('未找到 SPOTS');
+  const body = spotsM[1];
+  for (const p of PAGES) {
+    const re = new RegExp(`${p}:\\s*\\[([\\s\\S]*?)\\n\\s*\\]`, 'm');
+    const m = body.match(re);
+    if (m) data.specific[p] = parseHotspots(m[1]);
+  }
+}
+
+// 解析 NAV_ROUTES 块体（无 x/y/w/h）
+function parseRoutes(blockText) {
+  const arr = [];
+  const itemRe = /\{\s*name:\s*'([^']+)'\s*,\s*([^}]+?)\s*\}/g;
+  let m;
+  while ((m = itemRe.exec(blockText)) !== null) {
+    const name = m[1];
+    const fields = m[2];
+    let _kind = null, _target = null;
+    let pageM = fields.match(/page:\s*'([^']+)'/);
+    let actM  = fields.match(/action:\s*'([^']+)'/);
+    if (pageM) { _kind = 'page'; _target = pageM[1]; }
+    else if (actM) { _kind = 'action'; _target = actM[1]; }
+    arr.push({ name, _kind, _target });
+  }
+  return arr;
+}
+
+// 解析 NAV_LAYOUTS 中的某一页布局数组（仅含 x/y/w/h）
+function parseLayoutArray(blockText) {
+  const arr = [];
+  const itemRe = /\{\s*x:\s*([\d.-]+)\s*,\s*y:\s*([\d.-]+)\s*,\s*w:\s*([\d.-]+)\s*,\s*h:\s*([\d.-]+)\s*\}/g;
+  let m;
+  while ((m = itemRe.exec(blockText)) !== null) {
+    arr.push({ x: parseFloat(m[1]), y: parseFloat(m[2]), w: parseFloat(m[3]), h: parseFloat(m[4]) });
+  }
+  return arr;
+}
+
+// 解析单个对象列表 "  { name: '...', page: '...', x: 1, y: 2, w: 3, h: 4 },\n  { ... }"
+// 返回 [{ name, x, y, w, h, _kind, _target }]
+function parseHotspots(blockText) {
+  const arr = [];
+  // 跳过 ...NAV 行
+  const cleanText = blockText.replace(/\.\.\.NAV,?/g, '');
+  // 匹配每个 { ... } 对象（要求字段都在一行内 —— mockup 里都是这样写的）
+  const itemRe = /\{\s*name:\s*'([^']+)'\s*,\s*([^}]+?)\s*\}/g;
+  let m;
+  while ((m = itemRe.exec(cleanText)) !== null) {
+    const name = m[1];
+    const fields = m[2];
+    const xM = fields.match(/x:\s*([\d.-]+)/);
+    const yM = fields.match(/y:\s*([\d.-]+)/);
+    const wM = fields.match(/w:\s*([\d.-]+)/);
+    const hM = fields.match(/h:\s*([\d.-]+)/);
+    if (!xM || !yM || !wM || !hM) continue;
+    // 类型判定
+    let _kind = null, _target = null;
+    let pageM = fields.match(/page:\s*'([^']+)'/);
+    let actM  = fields.match(/action:\s*'([^']+)'/);
+    let toastAiM = fields.match(/toast:\s*AI_TOAST\(\s*'([^']+)'\s*\)/);
+    let toastM = !toastAiM && fields.match(/toast:\s*'([^']+)'/);
+    if (pageM) { _kind = 'page'; _target = pageM[1]; }
+    else if (actM) { _kind = 'action'; _target = actM[1]; }
+    else if (toastAiM) { _kind = 'ai_toast'; _target = toastAiM[1]; }
+    else if (toastM) { _kind = 'toast'; _target = toastM[1]; }
+    arr.push({
+      name, _kind, _target,
+      x: parseFloat(xM[1]),
+      y: parseFloat(yM[1]),
+      w: parseFloat(wM[1]),
+      h: parseFloat(hM[1]),
+    });
+  }
+  return arr;
+}
+
+// ============================================================
+// 切页
+// ============================================================
+function switchPage(p) {
+  currentPage = p;
+  document.querySelectorAll('.tabs .tab').forEach((b) => {
+    b.classList.toggle('active', b.getAttribute('data-page') === p);
+  });
+  // 切 mockup 背景
+  if (MOCKUP_IMG[p]) {
+    document.getElementById('map-img').src = MOCKUP_IMG[p];
+  }
+  activeKey = null;
+  resetView();
+  renderList();
+  renderRects();
+  renderEditor();
+  updateStats();
+}
+
+function updateStats() {
+  const navCount = data.navRoutes.length;
+  const pageCount = data.specific[currentPage]?.length || 0;
+  document.getElementById('stats').textContent = `${PAGE_TITLE[currentPage]} · NAV ${navCount}（本页布局） + 特有 ${pageCount}`;
+}
+
+/** 取当前页第 i 个 NAV 矩形（合并 routes[i] + navLayouts[currentPage][i]） */
+function getNavViewItem(i) {
+  const route = data.navRoutes[i];
+  const layout = (data.navLayouts[currentPage] && data.navLayouts[currentPage][i]) || { x: 0, y: 0, w: 5, h: 8 };
+  return { ...route, ...layout };
+}
+
+// ============================================================
+// 渲染左栏列表
+// ============================================================
+function renderList() {
+  const list = document.getElementById('hlist');
+  list.innerHTML = '';
+  // NAV 在前 —— 显示当前页布局
+  data.navRoutes.forEach((_, i) => addItem(list, getNavViewItem(i), 'nav:' + i, true));
+  // 本页特有
+  (data.specific[currentPage] || []).forEach((h, i) => addItem(list, h, 'page:' + i, false));
+  if (!data.navRoutes.length && !(data.specific[currentPage] || []).length) {
+    list.innerHTML = '<div class="empty-tip">本页无热区</div>';
+  }
+}
+
+function addItem(parent, h, key, isNav) {
+  const item = document.createElement('div');
+  item.className = 'hitem' + (isNav ? ' nav' : '') + (key === activeKey ? ' active' : '');
+  const badge = isNav ? 'NAV' : (h._kind === 'page' ? 'PAGE' : h._kind === 'action' ? 'ACT' : 'TOAST');
+  const cls = isNav ? 'nav' : (h._kind === 'page' ? 'page' : h._kind === 'action' ? 'act' : 'toast');
+  item.innerHTML = `<span class="badge ${cls}">${badge}</span><span class="name" title="${escapeHtml(h.name)}">${escapeHtml(h.name)}</span>`;
+  item.addEventListener('click', () => {
+    activeKey = key;
+    renderList();
+    renderRects();
+    renderEditor();
+  });
+  parent.appendChild(item);
+}
+
+function escapeHtml(s) { return String(s).replace(/[&<>"']/g, (c) => ({ '&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;' }[c])); }
+
+// ============================================================
+// 渲染中区矩形
+// ============================================================
+function renderRects() {
+  const wrap = document.getElementById('map-wrap');
+  wrap.querySelectorAll('.rect').forEach((el) => el.remove());
+
+  const all = [
+    ...data.navRoutes.map((_, i) => ({ h: getNavViewItem(i), key: 'nav:' + i, isNav: true })),
+    ...(data.specific[currentPage] || []).map((h, i) => ({ h, key: 'page:' + i, isNav: false })),
+  ];
+
+  for (const { h, key, isNav } of all) {
+    const r = document.createElement('div');
+    r.className = 'rect' + (isNav ? ' nav' : '') + (key === activeKey ? ' active' : '');
+    r.style.left = h.x + '%';
+    r.style.top = h.y + '%';
+    r.style.width = h.w + '%';
+    r.style.height = h.h + '%';
+    r.innerHTML = `
+      <div class="rect-label">${escapeHtml(h.name)}</div>
+      <div class="handle h-nw" data-handle="nw"></div>
+      <div class="handle h-ne" data-handle="ne"></div>
+      <div class="handle h-sw" data-handle="sw"></div>
+      <div class="handle h-se" data-handle="se"></div>
+      <div class="handle h-n"  data-handle="n"></div>
+      <div class="handle h-s"  data-handle="s"></div>
+      <div class="handle h-w"  data-handle="w"></div>
+      <div class="handle h-e"  data-handle="e"></div>
+    `;
+    r.addEventListener('mousedown', (e) => onRectMouseDown(e, key));
+    wrap.appendChild(r);
+  }
+}
+
+// ============================================================
+// 选择 / 编辑
+// 关键：NAV 项的 (x,y,w,h) 实际存在于 data.navLayouts[currentPage][idx]，
+//       getActive() 直接返回那个布局对象，使拖拽 / 数字输入 直接 mutate 该对象
+// ============================================================
+function getActive() {
+  if (!activeKey) return null;
+  const [ns, idx] = activeKey.split(':');
+  if (ns === 'nav') {
+    if (!data.navLayouts[currentPage]) data.navLayouts[currentPage] = [];
+    if (!data.navLayouts[currentPage][parseInt(idx)]) {
+      data.navLayouts[currentPage][parseInt(idx)] = { x: 0, y: 0, w: 5, h: 8 };
+    }
+    return data.navLayouts[currentPage][parseInt(idx)];
+  }
+  return (data.specific[currentPage] || [])[parseInt(idx)] || null;
+}
+
+/** 取当前选中项的 name（NAV 项从 routes 取，特有项从对象本身取） */
+function getActiveName() {
+  if (!activeKey) return '';
+  const [ns, idx] = activeKey.split(':');
+  if (ns === 'nav') return data.navRoutes[parseInt(idx)]?.name || '';
+  return (data.specific[currentPage] || [])[parseInt(idx)]?.name || '';
+}
+
+/** 取当前选中项的 _kind / _target（同上） */
+function getActiveMeta() {
+  if (!activeKey) return { _kind: null, _target: null };
+  const [ns, idx] = activeKey.split(':');
+  if (ns === 'nav') {
+    const r = data.navRoutes[parseInt(idx)];
+    return { _kind: r?._kind || null, _target: r?._target || null };
+  }
+  const item = (data.specific[currentPage] || [])[parseInt(idx)];
+  return { _kind: item?._kind || null, _target: item?._target || null };
+}
+
+function renderEditor() {
+  const ed = document.getElementById('editor');
+  const h = getActive();
+  if (!h) {
+    ed.innerHTML = '<div class="empty-tip">未选中任何热区<br/>左侧列表点击 / 中区单击矩形</div>';
+    return;
+  }
+  const isNav = activeKey.startsWith('nav:');
+  const meta = getActiveMeta();
+  const name = getActiveName();
+  const targetText = meta._kind === 'ai_toast'
+    ? `toast: AI_TOAST('${meta._target}')`
+    : meta._kind === 'page' ? `page: '${meta._target}'`
+    : meta._kind === 'action' ? `action: '${meta._target}'`
+    : meta._kind === 'toast' ? `toast: '${meta._target}'`
+    : '(无)';
+  ed.innerHTML = `
+    <div class="row">
+      <label>名称</label>
+      <input type="text" id="ed-name" value="${escapeHtml(name)}" ${isNav ? 'readonly title="NAV 名称由 NAV_ROUTES 统一管理，不可改"' : ''} />
+    </div>
+    <div class="row">
+      <label>类型</label>
+      <div class="readonly-info">${escapeHtml(targetText)}</div>
+    </div>
+    <div class="row">
+      <label>位置 %</label>
+      <div class="num4">
+        <input type="number" id="ed-x" step="0.1" value="${h.x}" title="x %"/>
+        <input type="number" id="ed-y" step="0.1" value="${h.y}" title="y %"/>
+        <input type="number" id="ed-w" step="0.1" value="${h.w}" title="w %"/>
+        <input type="number" id="ed-h" step="0.1" value="${h.h}" title="h %"/>
+      </div>
+    </div>
+    <div class="meta">
+      ${isNav
+        ? '<span style="color:#88bfff">NAV · ' + PAGE_TITLE[currentPage] + ' 页布局</span><br/>修改仅作用于本页 mockup PNG 的点击位置；跳转目标共享自 NAV_ROUTES。'
+        : '本项仅作用于"' + PAGE_TITLE[currentPage] + '"页'}
+    </div>
+  `;
+  // 绑定输入
+  ['x', 'y', 'w', 'h'].forEach((k) => {
+    const el = document.getElementById('ed-' + k);
+    el.addEventListener('input', () => {
+      const v = parseFloat(el.value);
+      if (!isNaN(v)) { h[k] = v; saveLS(); renderRects(); }
+    });
+  });
+  if (!isNav) {
+    document.getElementById('ed-name').addEventListener('input', (e) => {
+      const item = (data.specific[currentPage] || [])[parseInt(activeKey.split(':')[1])];
+      if (item) {
+        item.name = e.target.value;
+        saveLS();
+        renderList();
+        renderRects();
+      }
+    });
+  }
+}
+
+// ============================================================
+// 矩形拖拽 / 缩放
+// ============================================================
+function onRectMouseDown(e, key) {
+  e.preventDefault();
+  e.stopPropagation();
+  activeKey = key;
+  renderList();
+  renderRects();
+  renderEditor();
+
+  const handle = e.target.closest('.handle');
+  const handleType = handle ? handle.getAttribute('data-handle') : null;
+  const h = getActive();
+  if (!h) return;
+
+  rectDrag = {
+    kind: handleType ? 'resize-' + handleType : 'move',
+    baseX: h.x, baseY: h.y, baseW: h.w, baseH: h.h,
+    mouseStartX: e.clientX, mouseStartY: e.clientY,
+  };
+  document.addEventListener('mousemove', onRectMouseMove);
+  document.addEventListener('mouseup', onRectMouseUp, { once: true });
+}
+
+function onRectMouseMove(e) {
+  if (!rectDrag) return;
+  const h = getActive();
+  if (!h) return;
+  const rect = mapImg.getBoundingClientRect();
+  const dxPct = (e.clientX - rectDrag.mouseStartX) / rect.width * 100;
+  const dyPct = (e.clientY - rectDrag.mouseStartY) / rect.height * 100;
+
+  if (rectDrag.kind === 'move') {
+    h.x = clamp(rectDrag.baseX + dxPct, -50, 150);
+    h.y = clamp(rectDrag.baseY + dyPct, -50, 150);
+  } else {
+    const k = rectDrag.kind.slice(7);
+    let x = rectDrag.baseX, y = rectDrag.baseY, w = rectDrag.baseW, hh = rectDrag.baseH;
+    if (k.includes('n')) { y = rectDrag.baseY + dyPct; hh = rectDrag.baseH - dyPct; }
+    if (k.includes('s')) { hh = rectDrag.baseH + dyPct; }
+    if (k.includes('w')) { x = rectDrag.baseX + dxPct; w = rectDrag.baseW - dxPct; }
+    if (k.includes('e')) { w = rectDrag.baseW + dxPct; }
+    if (w >= 0.5 && hh >= 0.5) {
+      h.x = x; h.y = y; h.w = w; h.h = hh;
+    }
+  }
+  renderRects();
+  renderEditor();
+}
+
+function onRectMouseUp() {
+  document.removeEventListener('mousemove', onRectMouseMove);
+  rectDrag = null;
+  saveLS();
+}
+
+function clamp(v, lo, hi) { return Math.max(lo, Math.min(hi, v)); }
+
+// ============================================================
+// 缩放/平移（与 map-pin-tagger 同源）
+// ============================================================
+function applyView() {
+  const wrap = document.getElementById('map-wrap');
+  wrap.style.transform = `translate(${view.tx}px, ${view.ty}px) scale(${view.s})`;
+  document.getElementById('zoom-label').textContent = Math.round(view.s * 100) + '%';
+}
+
+function resetView() {
+  view.s = 1; view.tx = 0; view.ty = 0;
+  applyView();
+}
+
+function zoomBy(factor, anchor) {
+  const stage = document.getElementById('stage');
+  const r = stage.getBoundingClientRect();
+  const px = anchor ? anchor.x : r.width / 2;
+  const py = anchor ? anchor.y : r.height / 2;
+  const wx = (px - view.tx) / view.s;
+  const wy = (py - view.ty) / view.s;
+  const newS = Math.max(ZOOM_MIN, Math.min(ZOOM_MAX, view.s * factor));
+  if (newS === view.s) return;
+  view.tx = px - wx * newS;
+  view.ty = py - wy * newS;
+  view.s = newS;
+  applyView();
+}
+
+function onWheel(e) {
+  e.preventDefault();
+  const stage = document.getElementById('stage');
+  const r = stage.getBoundingClientRect();
+  const px = e.clientX - r.left, py = e.clientY - r.top;
+  const wx = (px - view.tx) / view.s, wy = (py - view.ty) / view.s;
+  const factor = e.deltaY < 0 ? 1.15 : 1 / 1.15;
+  const newS = Math.max(ZOOM_MIN, Math.min(ZOOM_MAX, view.s * factor));
+  if (newS === view.s) return;
+  view.tx = px - wx * newS;
+  view.ty = py - wy * newS;
+  view.s = newS;
+  applyView();
+}
+
+function onStageMouseDown(e) {
+  if (e.button !== 0) return;
+  if (e.target.closest('.rect')) return;
+  panState = { startX: e.clientX, startY: e.clientY, baseTx: view.tx, baseTy: view.ty, moved: false };
+  document.addEventListener('mousemove', onStageMouseMove);
+  document.addEventListener('mouseup', onStageMouseUp, { once: true });
+}
+function onStageMouseMove(e) {
+  if (!panState) return;
+  const dx = e.clientX - panState.startX, dy = e.clientY - panState.startY;
+  if (!panState.moved && Math.hypot(dx, dy) > CLICK_DRAG_THRESHOLD) {
+    panState.moved = true;
+    document.getElementById('stage-inner').classList.add('panning');
+  }
+  if (panState.moved) {
+    view.tx = panState.baseTx + dx;
+    view.ty = panState.baseTy + dy;
+    applyView();
+  }
+}
+function onStageMouseUp() {
+  document.removeEventListener('mousemove', onStageMouseMove);
+  document.getElementById('stage-inner').classList.remove('panning');
+  // 没拖动 → 视为"在背景上点击" → 取消选中
+  if (panState && !panState.moved) {
+    activeKey = null;
+    renderList();
+    renderRects();
+    renderEditor();
+  }
+  panState = null;
+}
+
+function onMapMove(e) {
+  const r = mapImg.getBoundingClientRect();
+  const x = ((e.clientX - r.left) / r.width) * 100;
+  const y = ((e.clientY - r.top) / r.height) * 100;
+  if (x < 0 || x > 100 || y < 0 || y > 100) return;
+  document.getElementById('hud-x').textContent = x.toFixed(2);
+  document.getElementById('hud-y').textContent = y.toFixed(2);
+}
+
+// ============================================================
+// localStorage
+// ============================================================
+function saveLS() {
+  try { localStorage.setItem(LS_KEY, JSON.stringify(data)); } catch (e) {}
+  renderJSON();
+}
+
+function loadLS() {
+  try {
+    const raw = localStorage.getItem(LS_KEY);
+    if (!raw) return false;
+    const obj = JSON.parse(raw);
+    if (!obj || !Array.isArray(obj.navRoutes) || !obj.navLayouts || !obj.specific) return false;
+    data = obj;
+    PAGES.forEach((p) => {
+      if (!data.specific[p]) data.specific[p] = [];
+      if (!data.navLayouts[p]) data.navLayouts[p] = [];
+    });
+    return true;
+  } catch (e) { return false; }
+}
+
+// ============================================================
+// 导出代码（NAV_ROUTES + NAV_LAYOUTS + SPOTS）
+// ============================================================
+function fmtPct(v) { return Number(v.toFixed(2)); }
+function fmtItem(h) {
+  const fields = [`name: '${h.name.replace(/'/g, "\\'")}'`];
+  if (h._kind === 'page') fields.push(`page: '${h._target}'`);
+  else if (h._kind === 'action') fields.push(`action: '${h._target}'`);
+  else if (h._kind === 'ai_toast') fields.push(`toast: AI_TOAST('${h._target}')`);
+  else if (h._kind === 'toast') fields.push(`toast: '${h._target.replace(/'/g, "\\'")}'`);
+  fields.push(`x: ${fmtPct(h.x)}`, `y: ${fmtPct(h.y)}`, `w: ${fmtPct(h.w)}`, `h: ${fmtPct(h.h)}`);
+  return `  { ${fields.join(', ')} },`;
+}
+
+function fmtRoute(r) {
+  const fields = [`name: '${r.name.replace(/'/g, "\\'")}'`];
+  if (r._kind === 'page') fields.push(`page: '${r._target}'`);
+  else if (r._kind === 'action') fields.push(`action: '${r._target}'`);
+  return `  { ${fields.join(', ')} },`;
+}
+
+function fmtLayoutEntry(l) {
+  return `{ x: ${fmtPct(l.x)}, y: ${fmtPct(l.y)}, w: ${fmtPct(l.w)}, h: ${fmtPct(l.h)} }`;
+}
+
+/** 判断某页布局与默认布局是否完全一致（用来导出 _NAV_DEFAULT 引用而非展开数组） */
+function isSameLayout(a, b) {
+  if (a.length !== b.length) return false;
+  for (let i = 0; i < a.length; i++) {
+    if (a[i].x !== b[i].x || a[i].y !== b[i].y || a[i].w !== b[i].w || a[i].h !== b[i].h) return false;
+  }
+  return true;
+}
+
+function buildExport() {
+  // 取首页布局作为 _NAV_DEFAULT 的模板（最常被复用）
+  const defaultLayout = data.navLayouts.home || [];
+
+  const lines = [
+    '// ===== 由 tools/hotspot-tagger.html 导出，复制以下三段替换 portal-main.js 中的对应位置 =====',
+    '',
+    'const NAV_ROUTES = [',
+    ...data.navRoutes.map(fmtRoute),
+    '];',
+    '',
+    'const _NAV_DEFAULT = [',
+    ...defaultLayout.map((l) => '  ' + fmtLayoutEntry(l) + ','),
+    '];',
+    '',
+    'const NAV_LAYOUTS = {',
+  ];
+  for (const p of PAGES) {
+    const layout = data.navLayouts[p] || defaultLayout;
+    if (isSameLayout(layout, defaultLayout)) {
+      lines.push(`  ${p.padEnd(13)}: _NAV_DEFAULT,`);
+    } else {
+      lines.push(`  ${p}: [`);
+      layout.forEach((l) => lines.push('    ' + fmtLayoutEntry(l) + ','));
+      lines.push('  ],');
+    }
+  }
+  lines.push('};');
+  lines.push('');
+  lines.push('const SPOTS = {');
+  for (const p of PAGES) {
+    const arr = data.specific[p] || [];
+    if (arr.length === 0) {
+      lines.push(`  ${p}: [...navOf('${p}')],`);
+    } else {
+      lines.push(`  ${p}: [`);
+      lines.push(`    ...navOf('${p}'),`);
+      arr.forEach((h) => lines.push('  ' + fmtItem(h)));
+      lines.push('  ],');
+    }
+  }
+  lines.push('};');
+  return lines.join('\n');
+}
+
+function renderJSON() {
+  document.getElementById('json-out').value = buildExport();
+}
+
+// ============================================================
+// 启动
+// ============================================================
+(async () => {
+  const loading = document.getElementById('loading');
+  try {
+    await loadMockups();
+    if (!loadLS()) {
+      await loadSpotsFromSource();
+    }
+    // 初始化背景图
+    const img = document.getElementById('map-img');
+    img.src = MOCKUP_IMG.home;
+    await new Promise((res) => { img.onload = res; img.onerror = res; });
+    mapImg = img;
+
+    loading.style.display = 'none';
+    document.getElementById('stage-inner').style.display = 'grid';
+    document.getElementById('hud-coord').style.display = 'block';
+    document.getElementById('zoom-bar').style.display = 'flex';
+
+    renderList();
+    renderRects();
+    renderEditor();
+    renderJSON();
+    updateStats();
+  } catch (e) {
+    loading.innerHTML = `<span class="err">❌ ${e.message}</span><br/>请确认 dev server 已启动`;
+    console.error(e);
+    return;
+  }
+
+  // ============ 事件绑定 ============
+  document.querySelectorAll('.tabs .tab').forEach((b) => {
+    b.addEventListener('click', () => switchPage(b.getAttribute('data-page')));
+  });
+
+  const stage = document.getElementById('stage');
+  stage.addEventListener('mousedown', onStageMouseDown);
+  document.getElementById('map-img').addEventListener('mousemove', onMapMove);
+  stage.addEventListener('wheel', onWheel, { passive: false });
+  stage.addEventListener('dblclick', (e) => {
+    if (e.target.closest('.rect')) return;
+    if (e.target.closest('#map-img')) return;
+    resetView();
+  });
+
+  document.getElementById('btn-zoom-in').addEventListener('click', () => zoomBy(1.4));
+  document.getElementById('btn-zoom-out').addEventListener('click', () => zoomBy(1 / 1.4));
+  document.getElementById('btn-zoom-reset').addEventListener('click', resetView);
+
+  document.getElementById('btn-reload').addEventListener('click', async () => {
+    if (!confirm('从 portal-main.js 重新加载会丢弃当前未导出的修改，确定？')) return;
+    await loadSpotsFromSource();
+    saveLS();
+    activeKey = null;
+    renderList();
+    renderRects();
+    renderEditor();
+    updateStats();
+  });
+
+  document.getElementById('btn-delete').addEventListener('click', () => deleteActive());
+
+  document.getElementById('btn-export').addEventListener('click', renderJSON);
+  document.getElementById('btn-copy').addEventListener('click', async () => {
+    const ta = document.getElementById('json-out');
+    try {
+      await navigator.clipboard.writeText(ta.value);
+      flashBtn('btn-copy', '已复制 ✓');
+    } catch (e) { ta.select(); document.execCommand('copy'); flashBtn('btn-copy', '已复制 ✓'); }
+  });
+  document.getElementById('btn-download').addEventListener('click', () => {
+    const blob = new Blob([buildExport()], { type: 'text/plain;charset=utf-8' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url; a.download = 'NAV_SPOTS.snippet.js'; a.click();
+    URL.revokeObjectURL(url);
+  });
+
+  // 键盘
+  document.addEventListener('keydown', (e) => {
+    if (e.target.matches('input, textarea')) return;
+    const h = getActive();
+    if (e.key === 'Escape') { activeKey = null; renderList(); renderRects(); renderEditor(); return; }
+    if (e.key === 'Delete' || e.key === 'Backspace') {
+      if (h) deleteActive();
+      return;
+    }
+    if (e.key === '+' || e.key === '=') { zoomBy(1.4); return; }
+    if (e.key === '-' || e.key === '_') { zoomBy(1 / 1.4); return; }
+    if (e.key === '0') { resetView(); return; }
+    if (h) {
+      const step = e.shiftKey ? 1 : 0.1;
+      let changed = false;
+      if (e.key === 'ArrowUp')    { h.y -= step; changed = true; }
+      if (e.key === 'ArrowDown')  { h.y += step; changed = true; }
+      if (e.key === 'ArrowLeft')  { h.x -= step; changed = true; }
+      if (e.key === 'ArrowRight') { h.x += step; changed = true; }
+      if (changed) {
+        e.preventDefault();
+        saveLS();
+        renderRects();
+        renderEditor();
+      }
+    }
+  });
+})();
+
+function deleteActive() {
+  if (!activeKey) return;
+  if (activeKey.startsWith('nav:')) {
+    // NAV 项不允许删（会破坏路由 - 布局对应关系）；按 Del 时给个友好提示
+    alert('NAV 路由是 6 页共享的，不能在工具里删除单项。\n如需取消某页的 NAV，请把该项 w/h 设为 0 或在 portal-main.js 中手工注释。');
+    return;
+  } else {
+    data.specific[currentPage].splice(parseInt(activeKey.split(':')[1]), 1);
+  }
+  activeKey = null;
+  saveLS();
+  renderList();
+  renderRects();
+  renderEditor();
+  updateStats();
+}
+
+function flashBtn(id, txt) {
+  const b = document.getElementById(id);
+  const orig = b.textContent;
+  b.textContent = txt;
+  setTimeout(() => { b.textContent = orig; }, 1200);
+}
+</script>
+
+</body>
+</html>

@@ -35,7 +35,7 @@ const GROUP_TARGETS = {
   },
   '组件集合肆': {
     position: { x: 1.9532, y: 0.5445, z: -1.0534 },
-    quaternion: { x: 0, y: 0.5736, z: 0, w: 0.8191 },
+    quaternion: { x: -0.0714, y: 0.5714, z: -0.05, w: 0.816 },
     scale: { x: 0.2385, y: 0.2385, z: 0.2385 },
   },
   '组件集合伍': {
@@ -123,7 +123,7 @@ let highlightedGroup = null;
 let originalEmissive = new Map();
 let explodeAmount = 0;
 let explodeTarget = 0;
-let explodeStrength = 1.6; // 模型最大边的倍数
+let explodeStrength = 2.6; // 默认值（解体后零件向外位移的世界单位距离，slider 0.5–6.0 可调）
 let lastTime = performance.now();
 
 // ========= UI 构建 =========
@@ -149,8 +149,8 @@ function ensureOverlay() {
           <button data-action="reset">重置视角</button>
           <span style="display:flex;align-items:center;gap:6px;color:#c9b58a;font-size:12px;letter-spacing:.16em;padding:0 6px;">
             强度
-            <input type="range" min="0.3" max="3.0" step="0.05" value="1.6" data-strength
-                   style="width:96px;">
+            <input type="range" min="0.5" max="6.0" step="0.1" value="2.6" data-strength
+                   style="width:120px;">
           </span>
         </div>
 
@@ -236,7 +236,7 @@ function setupThree(container) {
   controls.enableDamping = true;
   controls.dampingFactor = 0.08;
   controls.minDistance = 0.6;
-  controls.maxDistance = 12;
+  controls.maxDistance = 25;
   controls.maxPolarAngle = Math.PI * 0.95;
 
   raycaster = new THREE.Raycaster();
@@ -284,7 +284,8 @@ async function loadAllGroups(loadingEl) {
 
   const loader = new GLTFLoader();
   let loaded = 0;
-  for (const def of GROUPS) {
+  for (let idx = 0; idx < GROUPS.length; idx++) {
+    const def = GROUPS[idx];
     try {
       const gltf = await loader.loadAsync(def.glb);
       const root = gltf.scene;
@@ -304,16 +305,18 @@ async function loadAllGroups(loadingEl) {
       });
       scene.add(root);
 
-      // 解体辐射方向 = (本集合中心 - 万春亭中心)
+      // 解体辐射方向：万春亭 6 件主要在 Y 轴上垂直堆叠，水平差异微弱（≤2cm），
+      // 直接按"几何中心 − 装配中心"会让所有件几乎沿同一垂直线散开，看起来散得不够。
+      // 这里用「分层 Y + 等角横向」混合方向，保证视觉上呈现明显的扇形/花瓣展开。
       const box = new THREE.Box3().setFromObject(root);
       const center = box.getCenter(new THREE.Vector3());
-      let dir = center.clone().sub(ASSEMBLY_CENTER);
-      if (dir.lengthSq() < 0.0001) {
-        // 几乎重合（如集合陆木栓贴在中心）—— 给一个向上向外的辐射方向
-        dir.set(0, 1, 0);
-      } else {
-        dir.normalize();
-      }
+      const yComp = center.y - ASSEMBLY_CENTER.y;
+      const ySign = yComp >= 0 ? 1 : -1;
+      // 横向角度：6 件按 60° 等分，从 -90° 起逆时针展开（让上层向上、下层向下且各有不同方位）
+      const angle = (idx / GROUPS.length) * Math.PI * 2 - Math.PI / 2;
+      const horizontal = new THREE.Vector3(Math.cos(angle), 0, Math.sin(angle)).multiplyScalar(0.85);
+      const vertical = new THREE.Vector3(0, ySign * 0.55, 0);
+      const dir = horizontal.add(vertical).normalize();
 
       groupNodes.push({
         id: def.id,
@@ -453,6 +456,8 @@ export function openExplore(building) {
   ensureOverlay();
   overlay.classList.add('show');
   document.body.classList.add('portal-overlay-active');
+  // 探微 BGM = 末代皇帝
+  import('./bgm.js').then((BGM) => BGM.play('explore'));
   if (building) {
     overlay.querySelector('[data-name]').textContent = `探微 · ${building.shortName}`;
     overlay.querySelector('[data-meta]').textContent = `${building.era} · ${building.location}`;
@@ -477,6 +482,8 @@ export function closeExplore() {
     overlay.querySelector('[data-info]').classList.remove('show');
     if (!document.querySelector('.portal-overlay.show')) {
       document.body.classList.remove('portal-overlay-active');
+      // 回到门户：恢复浮光
+      import('./bgm.js').then((BGM) => BGM.play('portal'));
     }
   }, 400);
 }

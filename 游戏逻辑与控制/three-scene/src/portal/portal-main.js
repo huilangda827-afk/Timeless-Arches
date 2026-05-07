@@ -15,6 +15,7 @@ import { BUILDINGS, getBuildingById } from './buildings.js';
 import { openAppreciation } from './appreciation-overlay.js';
 import { openExplore } from './explore-overlay.js';
 import { openInspect } from './inspect-overlay.js';
+import * as BGM from './bgm.js';
 
 // IMG 字典由 mockup 内联保留为 window.MOCKUP_IMG
 const IMG = window.MOCKUP_IMG || {};
@@ -28,21 +29,90 @@ const TITLE = {
   map: '古建舆图',
 };
 
-const NAV = [
-  { name: '首页', page: 'home', x: 30.2, y: 1.2, w: 5.2, h: 8.2 },
-  { name: '万象', page: 'catalog', x: 38.0, y: 1.2, w: 5.2, h: 8.2 },
-  { name: '鉴赏', page: 'appreciation', x: 45.7, y: 1.2, w: 5.2, h: 8.2 },
-  { name: '探微', action: 'explore-direct', x: 53.4, y: 1.2, w: 5.2, h: 8.2 },
-  { name: '筑梦', action: 'forge-direct', x: 61.1, y: 1.2, w: 5.2, h: 8.2 },
-  { name: '藏阁', page: 'collection', x: 68.6, y: 1.2, w: 5.2, h: 8.2 },
+// ========================================================
+// NAV 路由（顶部 6 按钮）
+//   · NAV_ROUTES：路由定义（名称 + 跳转目标），所有页共享，不含位置
+//   · NAV_LAYOUTS：每页独立的 6 个矩形位置，按 NAV_ROUTES 顺序逐项对应
+//     如果某页 mockup PNG 把 NAV 画偏了，只改本页这一行即可，跳转逻辑不变
+//
+// 由 tools/hotspot-tagger.html 拖拽编辑，导出时刷新 NAV_LAYOUTS 即可
+// ========================================================
+const NAV_ROUTES = [
+  { name: '首页', page: 'home' },
+  { name: '万象', page: 'catalog' },
+  { name: '鉴赏', page: 'appreciation' },
+  { name: '探微', action: 'explore-direct' },
+  { name: '筑梦', action: 'forge-direct' },
+  { name: '藏阁', page: 'collection' },
 ];
+
+// 默认布局（对应当前首页 PNG 中 NAV 实际像素位置）—— 其它页若未单独覆盖则沿用此布局
+const _NAV_DEFAULT = [
+  { x: 30.2, y: 1.2, w: 5.2, h: 8.2 },
+  { x: 38.0, y: 1.2, w: 5.2, h: 8.2 },
+  { x: 45.4, y: 1.2, w: 5.2, h: 8.2 },
+  { x: 52.8, y: 1.2, w: 5.2, h: 8.2 },
+  { x: 60.3, y: 1.2, w: 5.2, h: 8.2 },
+  { x: 67.4, y: 1.2, w: 5.2, h: 8.2 },
+];
+
+// 由 tools/hotspot-tagger.html 标注导出（v1）—— 各页 PNG 上 NAV 实际像素位置
+const NAV_LAYOUTS = {
+  home: _NAV_DEFAULT,
+  catalog: [
+    { x: 33.52, y: 0.20, w: 4.73, h: 7.03 },
+    { x: 39.96, y: 0.20, w: 4.92, h: 7.03 },
+    { x: 46.36, y: -0.13, w: 5.01, h: 7.20 },
+    { x: 52.65, y: 0.03, w: 5.11, h: 7.03 },
+    { x: 58.95, y: -0.13, w: 4.92, h: 7.37 },
+    { x: 64.95, y: 0.03, w: 5.01, h: 7.53 },
+  ],
+  appreciation: [
+    { x: 33.37, y: -0.30, w: 5.20, h: 8.20 },
+    { x: 39.69, y: -0.30, w: 5.20, h: 8.20 },
+    { x: 45.98, y: -0.47, w: 5.20, h: 8.20 },
+    { x: 52.93, y: -0.30, w: 5.20, h: 8.20 },
+    { x: 59.04, y: -0.30, w: 5.20, h: 8.20 },
+    { x: 65.04, y: -0.30, w: 5.20, h: 8.20 },
+  ],
+  detail: [
+    { x: 33.10, y: 0.00, w: 5.20, h: 8.20 },
+    { x: 39.60, y: 0.10, w: 5.20, h: 8.20 },
+    { x: 46.10, y: -0.10, w: 5.20, h: 8.20 },
+    { x: 52.70, y: 0.00, w: 5.20, h: 8.20 },
+    { x: 58.90, y: -0.10, w: 5.20, h: 8.20 },
+    { x: 65.00, y: 0.10, w: 5.20, h: 8.20 },
+  ],
+  collection: [
+    { x: 31.70, y: 0.37, w: 5.20, h: 8.20 },
+    { x: 38.00, y: 0.20, w: 5.20, h: 8.20 },
+    { x: 44.10, y: 0.30, w: 5.20, h: 8.20 },
+    { x: 50.20, y: 0.30, w: 5.20, h: 8.20 },
+    { x: 56.00, y: 0.00, w: 5.20, h: 8.20 },
+    { x: 62.00, y: 0.10, w: 5.20, h: 8.20 },
+  ],
+  map: [
+    { x: 33.10, y: 0.10, w: 5.20, h: 8.20 },
+    { x: 39.80, y: -0.50, w: 5.20, h: 8.20 },
+    { x: 46.10, y: -0.50, w: 5.20, h: 8.20 },
+    { x: 52.70, y: -0.20, w: 5.20, h: 8.20 },
+    { x: 59.00, y: -0.10, w: 5.20, h: 8.20 },
+    { x: 64.90, y: -0.30, w: 5.20, h: 8.20 },
+  ],
+};
+
+/** 取某页的 NAV 完整定义（路由 + 该页布局） */
+function navOf(page) {
+  const layout = NAV_LAYOUTS[page] || _NAV_DEFAULT;
+  return NAV_ROUTES.map((r, i) => ({ ...r, ...(layout[i] || _NAV_DEFAULT[i]) }));
+}
 
 // 6 个 AI 图建筑统一 toast：引导用户去鉴赏页看真实模型
 const AI_TOAST = (n) => `「${n}」的精模正在筹备中。可前往"鉴赏"页查看 9 栋已建模的真实古建。`;
 
 const SPOTS = {
   home: [
-    ...NAV,
+    ...navOf('home'),
     { name: '万象卡', page: 'catalog', x: 4.2, y: 43.0, w: 17.6, h: 50.2 },
     { name: '鉴赏卡', page: 'appreciation', x: 22.3, y: 43.0, w: 17.6, h: 50.2 },
     { name: '探微卡', action: 'explore-direct', x: 40.4, y: 43.0, w: 17.6, h: 50.2 },
@@ -50,7 +120,7 @@ const SPOTS = {
     { name: '藏阁卡', page: 'collection', x: 76.6, y: 43.0, w: 17.6, h: 50.2 },
   ],
   catalog: [
-    ...NAV,
+    ...navOf('catalog'),
     { name: '古建舆图入口', page: 'map', x: 74.2, y: 10.6, w: 22.2, h: 11.8 },
     { name: '应县木塔', toast: AI_TOAST('应县木塔'), x: 23.9, y: 24.0, w: 23.2, h: 34.4 },
     { name: '佛光寺', toast: AI_TOAST('佛光寺'), x: 49.3, y: 24.0, w: 23.2, h: 34.4 },
@@ -63,14 +133,14 @@ const SPOTS = {
   ],
   appreciation: [
     // 只保留顶部 NAV，原 PNG 中央卡片区将被 9 建筑网格完全覆盖
-    ...NAV,
+    ...navOf('appreciation'),
   ],
   detail: [
-    ...NAV,
+    ...navOf('detail'),
     { name: '返回鉴赏列表', page: 'appreciation', x: 2.5, y: 9.4, w: 10.8, h: 5.8 },
   ],
   collection: [
-    ...NAV,
+    ...navOf('collection'),
     // 应县木塔卡：唯一可"检视"的卡片，点击进入 CS 仓库式 GLB 浮层
     { name: '应县木塔卡（可检视）', action: 'inspect-yingxian', x: 22.4, y: 23.0, w: 12.9, h: 34.5 },
     { name: '藏阁卡2', toast: '故宫太和殿 · 敬请期待', x: 36.0, y: 23.0, w: 12.9, h: 34.5 },
@@ -85,8 +155,9 @@ const SPOTS = {
     { name: '拓展延伸', toast: '拓展延伸 · 敬请期待', x: 88.0, y: 55.6, w: 7.4, h: 7.0 },
   ],
   map: [
-    ...NAV,
-    { name: '返回万象', page: 'catalog', x: 84.0, y: 11.0, w: 12.0, h: 5.0 },
+    ...navOf('map'),
+    // 工具同步：返回按钮位置经标注更新（87.8, 7.2）
+    { name: '返回万象', page: 'catalog', x: 87.8, y: 7.2, w: 12.0, h: 5.0 },
     // 不再用一整块 toast 热区遮罩地图：9 个建筑点位由 renderMapSpots() 动态生成
   ],
 };
@@ -108,6 +179,11 @@ function go(page) {
     pageImage.style.display = '';
   }
   routeLabel.textContent = '当前：' + (TITLE[page] || page);
+  // 门户内任意页（首页/万象/鉴赏/详情/藏阁/舆图）统一 BGM = 浮光
+  // 如果当前正在某 overlay（探微/检视）里，不打扰它的音轨
+  if (!document.body.classList.contains('portal-overlay-active')) {
+    BGM.play('portal');
+  }
   // 同步 body class（用于 catalog 滚动 / 其他页面相关样式）
   document.body.className = document.body.className
     .replace(/\bpage-\w+/g, '')
@@ -201,17 +277,17 @@ function renderCatalogExtras() {
 // ========================================================
 // 古建舆图：在地图 PNG 上覆盖 9 个金色脉冲点位
 // ========================================================
-// 点位坐标（% 相对 stage）—— 按地理位置近似标定，可在调试模式下进一步微调
+// 点位坐标（% 相对 stage）—— 由 tools/map-pin-tagger.html 在 mockup PNG 上人工标注导出
 const MAP_SPOTS = [
-  { id: 'wanchunting', x: 71.5, y: 33.5 },     // 北京
-  { id: 'hanyuandian', x: 56.0, y: 47.0 },     // 西安
-  { id: 'sanchuque', x: 56.6, y: 46.5 },       // 西安（陕西）—— 与含元殿同地区错开 1%
-  { id: 'xian-gulou', x: 55.4, y: 47.5 },      // 西安
-  { id: 'rishengchang', x: 60.0, y: 41.0 },    // 山西平遥
-  { id: 'pingyao-xianya', x: 60.6, y: 41.5 },  // 山西平遥（与日昇昌同地）
-  { id: 'jishi-minju', x: 61.5, y: 44.0 },     // 山西高平
-  { id: 'niuwangmiao-xitai', x: 60.2, y: 45.5 }, // 山西临汾
-  { id: 'guanfu', x: 64.0, y: 50.5 },          // 全国通用，标在中原（河南/山西交界）
+  { id: 'wanchunting',       x: 55.74, y: 48.87 }, // 北京 · 紫禁城御花园
+  { id: 'hanyuandian',       x: 48.36, y: 54.90 }, // 陕西 · 西安
+  { id: 'guanfu',            x: 52.96, y: 59.78 }, // 全国通用规制
+  { id: 'sanchuque',         x: 48.95, y: 58.96 }, // 陕西 · 西安
+  { id: 'xian-gulou',        x: 48.01, y: 57.06 }, // 陕西 · 西安
+  { id: 'jishi-minju',       x: 51.23, y: 51.99 }, // 山西 · 晋城高平
+  { id: 'pingyao-xianya',    x: 52.36, y: 53.65 }, // 山西 · 平遥
+  { id: 'niuwangmiao-xitai', x: 52.70, y: 57.18 }, // 山西 · 临汾
+  { id: 'rishengchang',      x: 52.51, y: 55.43 }, // 山西 · 平遥
 ];
 
 function renderMapSpots() {
@@ -239,8 +315,8 @@ let _searchInput = null;
 let _searchResults = null;
 
 function renderTopSearch() {
-  // 仅在 home / catalog / appreciation 三个页面显示搜索框
-  if (!['home', 'catalog', 'appreciation'].includes(current)) {
+  // 仅在 鉴赏 页显示搜索框（其他页搜索框会遮挡 PNG 背景上的关键信息）
+  if (current !== 'appreciation') {
     if (_searchEl) _searchEl.style.display = 'none';
     return;
   }
@@ -363,6 +439,25 @@ document.addEventListener('DOMContentLoaded', () => {
     document.getElementById('debugBtn').textContent =
       stage.classList.contains('debug') ? '隐藏热区' : '显示热区';
   };
+
+  // ---- BGM 静音开关（右下浮动按钮） ----
+  const bgmBtn = document.createElement('button');
+  bgmBtn.id = 'bgm-toggle';
+  bgmBtn.title = '背景音乐 · 浮光 / 末代皇帝';
+  bgmBtn.style.cssText = `
+    position:fixed;right:14px;bottom:14px;z-index:9000;
+    width:42px;height:42px;border-radius:50%;border:1px solid rgba(255,215,0,0.4);
+    background:rgba(28,22,18,0.85);color:#ffd24a;font-size:18px;cursor:pointer;
+    backdrop-filter:blur(6px);box-shadow:0 4px 14px rgba(0,0,0,0.4);
+    transition:all .18s;
+  `;
+  const refreshBgmBtn = () => {
+    bgmBtn.textContent = BGM.isMuted() ? '🔇' : '🎵';
+    bgmBtn.style.opacity = BGM.isMuted() ? '0.6' : '1';
+  };
+  bgmBtn.onclick = () => { BGM.toggleMute(); refreshBgmBtn(); };
+  document.body.appendChild(bgmBtn);
+  refreshBgmBtn();
 
   window.addEventListener('keydown', (e) => {
     if (e.key === 'd' || e.key === 'D') document.getElementById('debugBtn').click();

@@ -211,9 +211,10 @@ const LEVELS = [
         quaternion: { x: 0, y: -0.8191, z: 0, w: 0.5736 },
         scale: { x: 0.3577, y: 0.3578, z: 0.3577 },
       },
+      // 肆：GLB 根姿态相对伍/陆略“后仰”，仅靠 Y 轴旋转无法拉直；在伍/陆同族取向上施加绕 X 约 −10° 校正
       '组件集合肆': {
         position: { x: 1.9532, y: 0.5445, z: -1.0534 },
-        quaternion: { x: 0, y: 0.5736, z: 0, w: 0.8191 },
+        quaternion: { x: -0.0714, y: 0.5714, z: -0.05, w: 0.816 },
         scale: { x: 0.2385, y: 0.2385, z: 0.2385 },
       },
       '组件集合伍': {
@@ -246,7 +247,7 @@ const LEVELS = [
       },
       '组件集合肆': {
         position: { x: 2.5, y: 2.4, z: -1.5 },
-        quaternion: { x: 0.0338, y: 0.9577, z: 0.1261, w: 0.2566 },
+        quaternion: { x: 0, y: 0.3827, z: 0, w: 0.9239 },
         scale: { x: 0.35, y: 0.35, z: 0.35 },
       },
       '组件集合伍': {
@@ -3385,53 +3386,38 @@ function setupUIEvents() {
   });
 }
 
-    // 返回主页按钮
+    // 返回门户首页按钮（HUD 内左上角圆形 home 按钮）
+    // ⚠️ 性能注意：handInput.stop() 内部会调用 MediaPipe `hands.close()`，
+    //   该调用在清理 WASM / WebGL 资源时会同步阻塞主线程数百毫秒到 1–2 秒，
+    //   会让"返回"按钮按下后看起来"卡了一会儿才跳"。
+    //   页面卸载时浏览器自动销毁 JS/WASM/WebGL，无需手动 close。
+    //   这里只做硬件级清理（摄像头/BGM），其余交给浏览器卸载。
     if (btnHome) {
       btnHome.addEventListener('click', (e) => {
         e.preventDefault();
         e.stopPropagation();
-        console.log('[Main] ✅ 返回主页按钮被点击');
+        console.log('[Main] → 返回门户首页');
 
-        // 中断进行中的绕飞动画
+        // 中断绕飞动画（瞬时操作）
         if (flyAroundActive) flyAroundActive = false;
 
-        // 暂停 BGM（让主菜单安静）
-        stopBGM();
+        // 静音 BGM（仅 pause，不释放对象，瞬时操作）
+        try { stopBGM(); } catch (err) {}
 
-        // 退出放大模式（不带动画，瞬时还原），避免下次进游戏时仍在放大
-        if (zoomEnabled) {
-          zoomEnabled = false;
-          zoomAnimating = false;
-          const offset = camera.position.clone().sub(controls.target);
-          offset.multiplyScalar(ZOOM_FACTOR);
-          camera.position.copy(controls.target).add(offset);
-          if (controls.mouseButtons) {
-            controls.mouseButtons.LEFT = THREE.MOUSE.ROTATE;
-          }
-          controls.update();
-          showZoomBorder(false);
-          const btnZoom2 = document.getElementById('btn-zoom');
-          if (btnZoom2) {
-            btnZoom2.textContent = '放大 (Z)';
-            btnZoom2.style.removeProperty('background');
-          }
-        }
-        
-        if (pageMenu) pageMenu.classList.remove('hidden');
-        if (gameHud) gameHud.style.display = 'none';
-        if (renderer) {
-          renderer.domElement.style.pointerEvents = 'none';
-          // ✅ 禁用 OrbitControls
-          if (controls) {
-            controls.enabled = false;
-          }
-        }
-        
-        // 停止手势输入
-        if (handInput) {
-          handInput.stop();
-          cursorSphere.visible = false;
-        }
+        // 同步释放摄像头硬件流（避免摄像头指示灯残留几秒）
+        try {
+          const camVideos = document.querySelectorAll('video');
+          camVideos.forEach((v) => {
+            const stream = v.srcObject;
+            if (stream && stream.getTracks) {
+              stream.getTracks().forEach((t) => t.stop());
+            }
+            v.srcObject = null;
+          });
+        } catch (err) {}
+
+        // 立刻跳转，不等 MediaPipe / Three.js 清理（浏览器卸载时自动释放）
+        window.location.href = './index.html';
       });
     }
   };

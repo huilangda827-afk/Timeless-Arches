@@ -1,0 +1,625 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8" />
+  <title>古建舆图 · 点位标注工具</title>
+  <style>
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    html, body { width: 100%; height: 100%; background: #1a140a; color: #e8d8b0; font-family: 'Segoe UI','Microsoft YaHei',sans-serif; overflow: hidden; }
+
+    /* ============ 布局 ============ */
+    .layout { display: grid; grid-template-columns: 280px 1fr 320px; height: 100vh; }
+    .sidebar { background: #20180c; border-right: 1px solid #4a3a1c; overflow-y: auto; padding: 14px; }
+    .stage   { position: relative; background: #14100a; overflow: hidden; }
+    .panel   { background: #20180c; border-left: 1px solid #4a3a1c; overflow-y: auto; padding: 14px; }
+
+    h2 { font-size: 14px; letter-spacing: .15em; color: #f5b94a; margin-bottom: 10px; padding-bottom: 6px; border-bottom: 1px solid #4a3a1c; }
+    .hint { font-size: 12px; color: #c9b58a; line-height: 1.7; margin-bottom: 10px; }
+
+    /* ============ 建筑列表 ============ */
+    .blist { display: flex; flex-direction: column; gap: 4px; }
+    .bitem { display: flex; align-items: center; gap: 8px; padding: 8px 10px; border: 1px solid #3a2c14; border-radius: 6px; cursor: pointer; font-size: 13px; transition: all .15s; user-select: none; }
+    .bitem:hover { border-color: #f5b94a; background: #2c2010; }
+    .bitem.active { border-color: #f5b94a; background: #3a2c14; box-shadow: 0 0 0 2px rgba(245,185,74,0.3) inset; }
+    .bitem .dot { width: 10px; height: 10px; border-radius: 50%; flex-shrink: 0; }
+    .bitem .dot.placed { background: #f5b94a; box-shadow: 0 0 6px #f5b94a; }
+    .bitem .dot.empty { background: #3a2c14; border: 1px dashed #6a5238; }
+    .bitem .name { flex: 1; }
+    .bitem .pos { font-size: 10px; color: #c9b58a; opacity: .8; font-family: ui-monospace, monospace; }
+
+    /* ============ 工具按钮 ============ */
+    .toolbar { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 12px; }
+    button.t { background: #2c2010; color: #e8d8b0; border: 1px solid #6a5238; padding: 6px 10px; font-size: 12px; cursor: pointer; border-radius: 4px; }
+    button.t:hover { background: #3a2c14; border-color: #f5b94a; color: #f5b94a; }
+    button.t.danger { color: #ff8866; border-color: #884d3a; }
+    button.t.danger:hover { background: #3a1a14; }
+
+    /* ============ 舞台（地图区域） ============ */
+    .stage-inner { position: absolute; inset: 0; display: grid; place-items: center; padding: 20px; cursor: grab; }
+    .stage-inner.panning { cursor: grabbing; }
+    .map-wrap {
+      position: relative; max-width: 100%; max-height: 100%;
+      /* 缩放/平移由 JS 设置 transform；transform-origin 固定左上以便用 cursor pivot 调 translate */
+      transform-origin: 0 0;
+      transition: transform .05s linear;
+      will-change: transform;
+    }
+    .map-wrap img { display: block; max-width: 100%; max-height: calc(100vh - 40px); user-select: none; -webkit-user-drag: none; }
+    .map-wrap canvas.crosshair { position: absolute; inset: 0; pointer-events: none; }
+
+    /* ============ 标记点 ============ */
+    .pin { position: absolute; transform: translate(-50%, -50%); cursor: grab; z-index: 10; }
+    .pin:active { cursor: grabbing; }
+    .pin .pin-dot {
+      width: 14px; height: 14px; border-radius: 50%;
+      background: rgba(245,185,74,0.9); border: 2px solid #fff;
+      box-shadow: 0 0 0 2px rgba(245,185,74,0.4), 0 0 12px rgba(245,185,74,0.6);
+      transition: transform .15s;
+    }
+    .pin.active .pin-dot { background: #ff6644; box-shadow: 0 0 0 3px rgba(255,102,68,0.4), 0 0 14px rgba(255,102,68,0.7); transform: scale(1.3); }
+    .pin .pin-label {
+      position: absolute; left: 16px; top: 50%; transform: translateY(-50%);
+      background: rgba(20,16,10,0.92); color: #f5b94a; padding: 3px 8px;
+      border: 1px solid #4a3a1c; border-radius: 3px; font-size: 11px; white-space: nowrap;
+      letter-spacing: .1em; pointer-events: none;
+    }
+    .pin:hover .pin-dot { transform: scale(1.2); }
+    .pin:hover .pin-label { background: rgba(245,185,74,0.95); color: #14100a; border-color: #f5b94a; }
+
+    /* ============ 鼠标坐标 HUD ============ */
+    .hud-coord { position: absolute; bottom: 12px; left: 12px; background: rgba(20,16,10,0.85); border: 1px solid #4a3a1c; padding: 6px 10px; font-family: ui-monospace, monospace; font-size: 12px; color: #c9b58a; z-index: 50; pointer-events: none; }
+    .hud-coord b { color: #f5b94a; }
+
+    /* ============ 缩放控件 ============ */
+    .zoom-bar {
+      position: absolute; top: 12px; right: 12px;
+      display: flex; gap: 4px; background: rgba(20,16,10,0.92);
+      border: 1px solid #4a3a1c; border-radius: 4px; padding: 4px; z-index: 50;
+    }
+    .zoom-bar button {
+      background: #2c2010; color: #e8d8b0; border: 1px solid #6a5238;
+      width: 30px; height: 26px; font-size: 14px; cursor: pointer; border-radius: 3px;
+      display: flex; align-items: center; justify-content: center;
+    }
+    .zoom-bar button:hover { background: #3a2c14; border-color: #f5b94a; color: #f5b94a; }
+    .zoom-bar .zlabel {
+      color: #f5b94a; font-family: ui-monospace, monospace; font-size: 12px;
+      padding: 0 8px; display: flex; align-items: center; min-width: 48px; justify-content: center;
+    }
+
+    /* ============ 输出区 ============ */
+    .json-out {
+      width: 100%; min-height: 320px; background: #14100a; color: #e8d8b0;
+      border: 1px solid #4a3a1c; padding: 10px; font-family: ui-monospace, monospace;
+      font-size: 11px; line-height: 1.5; resize: vertical; word-break: break-all;
+    }
+    .panel .meta { font-size: 11px; color: #6a5238; margin-top: 8px; line-height: 1.5; }
+    .panel .meta code { background: #2c2010; padding: 1px 4px; border-radius: 2px; color: #c9b58a; }
+
+    /* ============ 加载/错误 ============ */
+    .loading { position: absolute; inset: 0; display: grid; place-items: center; color: #c9b58a; font-size: 14px; letter-spacing: .2em; z-index: 100; }
+    .err { color: #ff8866; }
+  </style>
+</head>
+<body>
+
+<div class="layout">
+
+  <!-- ========== 左：建筑列表 ========== -->
+  <aside class="sidebar">
+    <h2>建筑（共 9 处）</h2>
+    <div class="hint">
+      ① 点选下方建筑 →<br/>
+      ② 在右侧地图上左键单击 = 落点<br/>
+      ③ 落好的标记可拖动微调<br/>
+      ④ 完成后点"导出 JSON"复制到 <code>portal-main.js</code>
+      <hr style="margin:8px 0;border:0;border-top:1px solid #3a2c14"/>
+      <b style="color:#f5b94a">缩放/平移</b><br/>
+      · 滚轮 = 以光标为中心缩放<br/>
+      · 在图上拖动 = 平移<br/>
+      · <kbd>+</kbd>/<kbd>−</kbd> 缩放 · <kbd>0</kbd> 复位
+    </div>
+    <div class="blist" id="blist"></div>
+
+    <div class="toolbar">
+      <button class="t" id="btn-load-current">载入当前 portal</button>
+      <button class="t" id="btn-clear-pin">清除当前点位</button>
+      <button class="t danger" id="btn-clear-all">全部清空</button>
+    </div>
+  </aside>
+
+  <!-- ========== 中：地图舞台 ========== -->
+  <main class="stage" id="stage">
+    <div class="loading" id="loading">
+      正在从 <code>/index.html</code> 提取 MOCKUP_IMG.map …
+    </div>
+    <div class="stage-inner" id="stage-inner" style="display:none;">
+      <div class="map-wrap" id="map-wrap">
+        <img id="map-img" alt="古建舆图" />
+        <!-- pins 动态注入 -->
+      </div>
+    </div>
+    <div class="hud-coord" id="hud-coord" style="display:none;">
+      鼠标 <b id="hud-x">--</b>%, <b id="hud-y">--</b>%
+    </div>
+    <div class="zoom-bar" id="zoom-bar" style="display:none;">
+      <button id="btn-zoom-out" title="缩小（−）">−</button>
+      <button id="btn-zoom-reset" title="复位（0）">⟳</button>
+      <button id="btn-zoom-in" title="放大（+）">+</button>
+      <span class="zlabel" id="zoom-label">100%</span>
+    </div>
+  </main>
+
+  <!-- ========== 右：输出区 ========== -->
+  <aside class="panel">
+    <h2>导出（粘贴到 <code style="background:#2c2010;padding:1px 4px">portal-main.js</code>）</h2>
+    <div class="hint">
+      变量名：<code style="background:#2c2010;padding:1px 4px">const MAP_SPOTS</code><br/>
+      格式：<code style="background:#2c2010;padding:1px 4px">[{ id, x, y }, …]</code>
+    </div>
+    <div class="toolbar" style="margin-top:0;margin-bottom:8px;">
+      <button class="t" id="btn-export">导出 JSON</button>
+      <button class="t" id="btn-copy">复制到剪贴板</button>
+      <button class="t" id="btn-download">下载文件</button>
+    </div>
+    <textarea class="json-out" id="json-out" readonly></textarea>
+    <div class="meta">
+      自动保存：每次落点/拖动后写入 <code>localStorage["map-pins-v1"]</code>
+      <br/>关闭页面后再打开会自动恢复。
+    </div>
+  </aside>
+</div>
+
+<script type="module">
+// ============================================================
+// 9 个建筑（与 buildings.js 保持同步；只用到 id + shortName + location）
+// ============================================================
+const BUILDINGS = [
+  { id: 'wanchunting',       shortName: '万春亭',     location: '北京 · 紫禁城御花园' },
+  { id: 'hanyuandian',       shortName: '含元殿',     location: '陕西 · 西安' },
+  { id: 'guanfu',            shortName: '宋金官府',   location: '全国通用规制' },
+  { id: 'sanchuque',         shortName: '三出阙',     location: '陕西 · 西安' },
+  { id: 'xian-gulou',        shortName: '西安鼓楼',   location: '陕西 · 西安' },
+  { id: 'jishi-minju',       shortName: '姬氏民居',   location: '山西 · 晋城高平' },
+  { id: 'pingyao-xianya',    shortName: '平遥县衙',   location: '山西 · 平遥' },
+  { id: 'niuwangmiao-xitai', shortName: '牛王庙戏台', location: '山西 · 临汾' },
+  { id: 'rishengchang',      shortName: '日昇昌票号', location: '山西 · 平遥' },
+];
+
+// ============================================================
+// 状态
+// ============================================================
+const LS_KEY = 'map-pins-v1';
+const pins = new Map(); // id -> { x, y } 百分比（0..100）
+let activeId = null;
+let mapImg = null;
+let dragState = null;
+
+// 缩放/平移状态：transform = scale(s) translate(tx, ty)（origin 在 wrap 左上）
+const view = { s: 1, tx: 0, ty: 0 };
+const ZOOM_MIN = 0.4;
+const ZOOM_MAX = 8;
+let panState = null;
+// 区分"空白处单击 = 落点" 与 "空白处拖动 = 平移"：mousedown 后 ≤ 4px 算 click
+const CLICK_DRAG_THRESHOLD = 4;
+
+function applyView() {
+  const wrap = document.getElementById('map-wrap');
+  wrap.style.transform = `translate(${view.tx}px, ${view.ty}px) scale(${view.s})`;
+  document.getElementById('zoom-label').textContent = Math.round(view.s * 100) + '%';
+}
+
+function resetView() {
+  view.s = 1;
+  view.tx = 0;
+  view.ty = 0;
+  applyView();
+}
+
+// ============================================================
+// 启动：从 / 提取 MOCKUP_IMG.map base64
+// ============================================================
+async function loadMapImage() {
+  const loading = document.getElementById('loading');
+  try {
+    const res = await fetch('/index.html');
+    const html = await res.text();
+    // MOCKUP_IMG.map 形如  map: "data:image/png;base64,XXXXXXXX",
+    const m = html.match(/map:\s*"(data:image\/[^"]+)"/);
+    if (!m) throw new Error('未在 index.html 中找到 MOCKUP_IMG.map');
+    const dataUrl = m[1];
+    const img = document.getElementById('map-img');
+    await new Promise((resolve, reject) => {
+      img.onload = resolve;
+      img.onerror = () => reject(new Error('地图 base64 解码失败'));
+      img.src = dataUrl;
+    });
+    mapImg = img;
+    loading.style.display = 'none';
+    document.getElementById('stage-inner').style.display = 'grid';
+    document.getElementById('hud-coord').style.display = 'block';
+    document.getElementById('zoom-bar').style.display = 'flex';
+  } catch (e) {
+    loading.innerHTML = `<span class="err">❌ ${e.message}</span><br/><br/>请确认 dev server 已启动（<code>npm run dev</code>）`;
+    throw e;
+  }
+}
+
+// ============================================================
+// 渲染建筑列表
+// ============================================================
+function renderList() {
+  const list = document.getElementById('blist');
+  list.innerHTML = '';
+  for (const b of BUILDINGS) {
+    const placed = pins.has(b.id);
+    const pos = placed ? `${pins.get(b.id).x.toFixed(1)}%, ${pins.get(b.id).y.toFixed(1)}%` : '未标';
+    const item = document.createElement('div');
+    item.className = 'bitem' + (b.id === activeId ? ' active' : '');
+    item.innerHTML = `
+      <span class="dot ${placed ? 'placed' : 'empty'}"></span>
+      <span class="name">${b.shortName}<br/><span style="font-size:10px;color:#c9b58a;">${b.location}</span></span>
+      <span class="pos">${pos}</span>
+    `;
+    item.addEventListener('click', () => {
+      activeId = b.id;
+      renderList();
+      renderPins();
+    });
+    list.appendChild(item);
+  }
+}
+
+// ============================================================
+// 渲染所有标记点
+// ============================================================
+function renderPins() {
+  const wrap = document.getElementById('map-wrap');
+  wrap.querySelectorAll('.pin').forEach((el) => el.remove());
+  for (const [id, pos] of pins.entries()) {
+    const b = BUILDINGS.find((x) => x.id === id);
+    if (!b) continue;
+    const pin = document.createElement('div');
+    pin.className = 'pin' + (id === activeId ? ' active' : '');
+    pin.style.left = pos.x + '%';
+    pin.style.top = pos.y + '%';
+    pin.innerHTML = `<div class="pin-dot"></div><div class="pin-label">${b.shortName}</div>`;
+    pin.addEventListener('mousedown', (e) => onPinDragStart(e, id));
+    pin.addEventListener('click', (e) => {
+      e.stopPropagation();
+      activeId = id;
+      renderList();
+      renderPins();
+    });
+    wrap.appendChild(pin);
+  }
+}
+
+// ============================================================
+// 落点（仅在"鼠标按下→抬起，且未平移"时触发）
+// ============================================================
+function placePin(e) {
+  if (!activeId) {
+    flashActiveTip();
+    return;
+  }
+  // getBoundingClientRect() 自动包含 transform，因此 % 始终基于"实际显示尺寸"
+  const rect = mapImg.getBoundingClientRect();
+  const x = ((e.clientX - rect.left) / rect.width) * 100;
+  const y = ((e.clientY - rect.top) / rect.height) * 100;
+  if (x < 0 || x > 100 || y < 0 || y > 100) return; // 缩放/平移后点击到图外
+  pins.set(activeId, { x, y });
+  saveToLS();
+  renderList();
+  renderPins();
+}
+
+function flashActiveTip() {
+  const list = document.getElementById('blist');
+  list.style.boxShadow = '0 0 0 2px #f5b94a inset';
+  setTimeout(() => { list.style.boxShadow = ''; }, 600);
+}
+
+// ============================================================
+// 平移（在 stage 空白处或图片上按下并拖动）
+// ============================================================
+function onStageMouseDown(e) {
+  if (e.button !== 0) return;
+  // 如果按下点是 pin，让 pin 自己的 handler 处理
+  if (e.target.closest('.pin')) return;
+  panState = {
+    startX: e.clientX, startY: e.clientY,
+    baseTx: view.tx, baseTy: view.ty,
+    moved: false,
+    rawEvent: e,
+  };
+  document.addEventListener('mousemove', onStageMouseMove);
+  document.addEventListener('mouseup', onStageMouseUp, { once: true });
+}
+
+function onStageMouseMove(e) {
+  if (!panState) return;
+  const dx = e.clientX - panState.startX;
+  const dy = e.clientY - panState.startY;
+  if (!panState.moved && Math.hypot(dx, dy) > CLICK_DRAG_THRESHOLD) {
+    panState.moved = true;
+    document.getElementById('stage-inner').classList.add('panning');
+  }
+  if (panState.moved) {
+    view.tx = panState.baseTx + dx;
+    view.ty = panState.baseTy + dy;
+    applyView();
+  }
+}
+
+function onStageMouseUp(e) {
+  document.removeEventListener('mousemove', onStageMouseMove);
+  document.getElementById('stage-inner').classList.remove('panning');
+  const wasPan = panState && panState.moved;
+  const startEvent = panState && panState.rawEvent;
+  panState = null;
+  // 没拖动 → 把它当作"在地图上的单击"，落点（仅当点在图片内时）
+  if (!wasPan && startEvent && e.target.closest('#map-img')) {
+    placePin(e);
+  }
+}
+
+// ============================================================
+// 缩放（鼠标滚轮 = 以光标为中心）
+// ============================================================
+function onWheel(e) {
+  e.preventDefault();
+  const stage = document.getElementById('stage');
+  const rect = stage.getBoundingClientRect();
+  // 光标相对 stage 的坐标（这是 wrap 的 transform 参考系）
+  const px = e.clientX - rect.left;
+  const py = e.clientY - rect.top;
+  // wrap 的 origin 是 0,0；wrap 现在在 (tx, ty) 平移 + scale(s)
+  // 先求"光标在原始 wrap 坐标系"的位置
+  const wx = (px - view.tx) / view.s;
+  const wy = (py - view.ty) / view.s;
+  // 缩放因子（向上滚轮 deltaY < 0 = 放大）
+  const factor = e.deltaY < 0 ? 1.15 : 1 / 1.15;
+  const newS = Math.max(ZOOM_MIN, Math.min(ZOOM_MAX, view.s * factor));
+  if (newS === view.s) return;
+  // 调整 tx/ty 让 (wx, wy) 在屏幕上仍位于 (px, py)
+  view.tx = px - wx * newS;
+  view.ty = py - wy * newS;
+  view.s = newS;
+  applyView();
+}
+
+function zoomBy(factor, anchor) {
+  const stage = document.getElementById('stage');
+  const rect = stage.getBoundingClientRect();
+  const px = anchor ? anchor.x : rect.width / 2;
+  const py = anchor ? anchor.y : rect.height / 2;
+  const wx = (px - view.tx) / view.s;
+  const wy = (py - view.ty) / view.s;
+  const newS = Math.max(ZOOM_MIN, Math.min(ZOOM_MAX, view.s * factor));
+  if (newS === view.s) return;
+  view.tx = px - wx * newS;
+  view.ty = py - wy * newS;
+  view.s = newS;
+  applyView();
+}
+
+// ============================================================
+// 拖动单个点
+// ============================================================
+function onPinDragStart(e, id) {
+  e.preventDefault();
+  e.stopPropagation();
+  activeId = id;
+  renderList();
+  dragState = { id };
+  document.addEventListener('mousemove', onPinDragMove);
+  document.addEventListener('mouseup', onPinDragEnd, { once: true });
+}
+
+function onPinDragMove(e) {
+  if (!dragState) return;
+  const rect = mapImg.getBoundingClientRect();
+  const x = Math.max(0, Math.min(100, ((e.clientX - rect.left) / rect.width) * 100));
+  const y = Math.max(0, Math.min(100, ((e.clientY - rect.top) / rect.height) * 100));
+  pins.set(dragState.id, { x, y });
+  renderPins();
+  updateHUD(x, y);
+}
+
+function onPinDragEnd() {
+  document.removeEventListener('mousemove', onPinDragMove);
+  saveToLS();
+  setTimeout(() => { dragState = null; }, 50); // 防止 mouseup 触发 click
+  renderList();
+}
+
+// ============================================================
+// HUD 鼠标坐标
+// ============================================================
+function onMapMove(e) {
+  const rect = mapImg.getBoundingClientRect();
+  const x = ((e.clientX - rect.left) / rect.width) * 100;
+  const y = ((e.clientY - rect.top) / rect.height) * 100;
+  if (x < 0 || x > 100 || y < 0 || y > 100) return;
+  updateHUD(x, y);
+}
+
+function updateHUD(x, y) {
+  document.getElementById('hud-x').textContent = x.toFixed(2);
+  document.getElementById('hud-y').textContent = y.toFixed(2);
+}
+
+// ============================================================
+// 持久化
+// ============================================================
+function saveToLS() {
+  const obj = Object.fromEntries(pins.entries());
+  localStorage.setItem(LS_KEY, JSON.stringify(obj));
+  renderJSON();
+}
+
+function loadFromLS() {
+  try {
+    const raw = localStorage.getItem(LS_KEY);
+    if (!raw) return;
+    const obj = JSON.parse(raw);
+    for (const [id, pos] of Object.entries(obj)) {
+      pins.set(id, pos);
+    }
+  } catch (e) {}
+}
+
+// ============================================================
+// 导出 / 复制 / 下载
+// ============================================================
+function buildSpotsArray() {
+  const arr = [];
+  for (const b of BUILDINGS) {
+    if (pins.has(b.id)) {
+      const p = pins.get(b.id);
+      arr.push({ id: b.id, x: +p.x.toFixed(2), y: +p.y.toFixed(2) });
+    }
+  }
+  return arr;
+}
+
+function renderJSON() {
+  const arr = buildSpotsArray();
+  const lines = [
+    '// 由 tools/map-pin-tagger.html 导出',
+    '// 复制以下数组替换 portal-main.js 中的 const MAP_SPOTS = [...]',
+    'const MAP_SPOTS = [',
+    ...arr.map((s) => {
+      const b = BUILDINGS.find((x) => x.id === s.id);
+      const note = b ? `  // ${b.shortName} · ${b.location}` : '';
+      return `  { id: '${s.id}', x: ${s.x}, y: ${s.y} },${note}`;
+    }),
+    '];',
+  ];
+  document.getElementById('json-out').value = lines.join('\n');
+}
+
+document.getElementById('btn-export').addEventListener('click', renderJSON);
+
+document.getElementById('btn-copy').addEventListener('click', async () => {
+  const ta = document.getElementById('json-out');
+  try {
+    await navigator.clipboard.writeText(ta.value);
+    flashBtn('btn-copy', '已复制 ✓');
+  } catch (e) {
+    ta.select();
+    document.execCommand('copy');
+    flashBtn('btn-copy', '已复制 ✓');
+  }
+});
+
+document.getElementById('btn-download').addEventListener('click', () => {
+  const blob = new Blob([document.getElementById('json-out').value], { type: 'text/plain;charset=utf-8' });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = url;
+  a.download = 'MAP_SPOTS.snippet.js';
+  a.click();
+  URL.revokeObjectURL(url);
+});
+
+function flashBtn(id, txt) {
+  const b = document.getElementById(id);
+  const orig = b.textContent;
+  b.textContent = txt;
+  setTimeout(() => { b.textContent = orig; }, 1200);
+}
+
+// ============================================================
+// 工具按钮
+// ============================================================
+document.getElementById('btn-load-current').addEventListener('click', async () => {
+  // 从 portal-main.js 读取当前 MAP_SPOTS
+  try {
+    const res = await fetch('/src/portal/portal-main.js');
+    const txt = await res.text();
+    const m = txt.match(/const\s+MAP_SPOTS\s*=\s*\[([\s\S]*?)\];/);
+    if (!m) throw new Error('未在 portal-main.js 中找到 MAP_SPOTS');
+    const body = m[1];
+    const itemRe = /\{\s*id:\s*'([^']+)'\s*,\s*x:\s*([\d.-]+)\s*,\s*y:\s*([\d.-]+)/g;
+    pins.clear();
+    let mm;
+    while ((mm = itemRe.exec(body)) !== null) {
+      pins.set(mm[1], { x: parseFloat(mm[2]), y: parseFloat(mm[3]) });
+    }
+    saveToLS();
+    renderList();
+    renderPins();
+    flashBtn('btn-load-current', `已载入 ${pins.size} 个点`);
+  } catch (e) {
+    alert('载入失败：' + e.message);
+  }
+});
+
+document.getElementById('btn-clear-pin').addEventListener('click', () => {
+  if (!activeId) return;
+  pins.delete(activeId);
+  saveToLS();
+  renderList();
+  renderPins();
+});
+
+document.getElementById('btn-clear-all').addEventListener('click', () => {
+  if (!confirm('确认清空所有 9 个标记点？')) return;
+  pins.clear();
+  saveToLS();
+  renderList();
+  renderPins();
+});
+
+// ============================================================
+// 启动
+// ============================================================
+(async () => {
+  loadFromLS();
+  renderList();
+  await loadMapImage();
+  renderPins();
+  renderJSON();
+  // 选中第一个未标的建筑
+  if (!activeId) {
+    const first = BUILDINGS.find((b) => !pins.has(b.id)) || BUILDINGS[0];
+    activeId = first.id;
+    renderList();
+  }
+  // 绑定地图事件（mousedown/mouseup 区分单击落点 vs 拖动平移）
+  const stage = document.getElementById('stage');
+  stage.addEventListener('mousedown', onStageMouseDown);
+  document.getElementById('map-img').addEventListener('mousemove', onMapMove);
+
+  // 滚轮缩放（passive: false 才能 preventDefault）
+  stage.addEventListener('wheel', onWheel, { passive: false });
+
+  // 双击纯空白处（图片外）才复位 —— 防止与"在图上快速连击落两点"混淆
+  stage.addEventListener('dblclick', (e) => {
+    if (e.target.closest('.pin')) return;
+    if (e.target.closest('#map-img')) return;
+    resetView();
+  });
+
+  // 缩放按钮
+  document.getElementById('btn-zoom-in').addEventListener('click', () => zoomBy(1.4));
+  document.getElementById('btn-zoom-out').addEventListener('click', () => zoomBy(1 / 1.4));
+  document.getElementById('btn-zoom-reset').addEventListener('click', resetView);
+
+  // 键盘快捷键：+ - 缩放，0 复位
+  document.addEventListener('keydown', (e) => {
+    if (e.target.matches('input, textarea')) return;
+    if (e.key === '+' || e.key === '=') zoomBy(1.4);
+    else if (e.key === '-' || e.key === '_') zoomBy(1 / 1.4);
+    else if (e.key === '0') resetView();
+  });
+
+  // 防止滚轮误触发页面滚动
+  stage.addEventListener('contextmenu', (e) => e.preventDefault());
+})();
+</script>
+
+</body>
+</html>
