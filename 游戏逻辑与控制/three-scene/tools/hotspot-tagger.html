@@ -253,7 +253,8 @@ async function loadMockups() {
   const res = await fetch('/index.html');
   const html = await res.text();
   for (const p of PAGES) {
-    const re = new RegExp(`${p}:\\s*"(data:image\\/[^"]+)"`);
+    // 兼容两种形式：早期内联 base64（data:image/...）与现行静态路径（/images/mockups/*.png）
+    const re = new RegExp(`${p}:\\s*"((?:data:image\\/|\\/)[^"]+)"`);
     const m = html.match(re);
     if (m) MOCKUP_IMG[p] = m[1];
   }
