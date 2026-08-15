@@ -3,6 +3,7 @@
 //
 //   关卡壹 · 单翘斗拱：幽灵组件.glb 内含 5 个 "X配套" 节点，缺 2 件
 //   关卡贰 · 万春亭铺作：level2 六大组件集合按校准位姿组装，缺 3 件
+//   关卡叁 · 圣母殿铺作：level3 十组构件按校准位姿组装，缺 4 件
 //
 //   - 缺口金色残影提示可开关（关闭后全凭对照参照的眼力）
 //   - 完整参照模型摆在左侧
@@ -13,6 +14,7 @@ import { GLTFLoader } from 'three/examples/jsm/loaders/GLTFLoader.js';
 import { OrbitControls } from 'three/examples/jsm/controls/OrbitControls.js';
 import { markRepair } from '../shared/records.js';
 import { mountBgm } from '../shared/bgm-widget.js';
+import { encodeAssetUrl } from '../shared/asset-url.js';
 
 mountBgm('forge');
 
@@ -87,6 +89,71 @@ const LEVELS = [
       },
     ],
   },
+  {
+    id: 'shengmudian',
+    tab: '叁 · 圣母殿铺作',
+    title: '晋祠圣母殿铺作（宋 · 五铺作单杪单昂）',
+    mode: 'multiFile',
+    prefix: '/models/level3/',
+    missCount: 4,
+    trayCount: 8, // 4 正确 + 4 干扰
+    refGap: 2.0,
+    winBody:
+      '栌斗起步、华栱出跳、批竹昂斜贯全攒、槫枋层层收顶——十组构件归位，北宋《营造法式》的力学范式在你手中复原。晋祠圣母殿这座宋构孤例，最懂"一平一斜互为制衡"的智慧。',
+    // target 位姿与 main.js LEVELS[2].targetOverrides 同步（tools/calibrator 2026-08-13 校准）
+    pieces: [
+      {
+        name: '1底部', display: '栌斗基座',
+        lore: '柱头之上的四耳栌斗与基座枋木，整攒铺作由此起步，承接全部上传荷载。',
+        tf: { p: [2.9, 0.1, 1.1], q: [0, -0.2588, 0, 0.9659], s: [0.65, 0.65, 0.65] },
+      },
+      {
+        name: '2泥道栱、散斗与一跳华栱、散斗与交互斗与阑额一道柱头枋、散斗', display: '泥道栱层',
+        lore: '泥道栱横置栌斗口内，一跳华栱向外挑出，交互斗与阑额、柱头枋锁定第一层出跳。',
+        tf: { p: [2.883, 0.3, 1.0813], q: [0, -0.2588, 0, 0.9659], s: [0.55, 0.55, 0.55] },
+      },
+      {
+        name: '3华头子出头（出一折）、交互斗、梭形栱', display: '华头子层',
+        lore: '华头子出头承托下昂昂底，梭形栱线条流畅，是宋构"出一折"的典型做法。',
+        tf: { p: [2.883, 0.4, 1.081], q: [0, 0.5, 0, 0.866], s: [0.4, 0.4, 0.4] },
+      },
+      {
+        name: '4瓜子栱与散斗、丁头栱（充当鞾楔作用）与散斗', display: '瓜子栱层',
+        lore: '瓜子栱承托上层枋木，丁头栱在此充当鞾楔，垫稳斜置的昂身。',
+        tf: { p: [2.9, 0.47, 1.1], q: [0, 0.9659, 0, 0.2588], s: [0.5, 0.5, 0.5] },
+      },
+      {
+        name: '5二道柱头枋（隐刻短栱）、散斗', display: '二道柱头枋',
+        lore: '隐刻短栱的第二道柱头枋，把纵向拱列拉结为整体。',
+        tf: { p: [3.14, 0.47, 0.781], q: [0, -0.2588, 0, 0.9659], s: [0.6, 0.6, 0.6] },
+      },
+      {
+        name: '6昂尾下皮置鞾楔与一道下昂（批竹昂起棱出尖）、昂尾上置散斗、替木、平槫', display: '下昂组',
+        lore: '批竹昂起棱出尖斜贯全攒，昂尾压于槫下——以杠杆之力平衡深远出檐，宋式真昂的精髓。',
+        tf: { p: [2.883, 0.49, 1.081], q: [0, 0.9659, 0, 0.2588], s: [0.55, 0.55, 0.55] },
+      },
+      {
+        name: '7罗汉枋、令栱、散斗', display: '罗汉枋层',
+        lore: '罗汉枋与令栱、散斗配合，承托外跳最前端的荷载。',
+        tf: { p: [2.881, 0.4, 0.937], q: [0, -0.2588, 0, 0.9659], s: [0.6, 0.6, 0.6] },
+      },
+      {
+        name: '9三道柱头枋（隐刻长栱）、散斗、替木（通檐', display: '三道柱头枋',
+        lore: '隐刻长栱的第三道柱头枋，配替木通檐拉结，结构至此渐收。',
+        tf: { p: [2.9, 0.7, 1], q: [0, -0.2588, 0, 0.9659], s: [0.55, 0.55, 0.55] },
+      },
+      {
+        name: '10压槽枋、撩檐槫', display: '压槽枋组',
+        lore: '压槽枋压住昂尾，撩檐槫承接屋面重量，力流在此转入柱身。',
+        tf: { p: [2.97, 0.63, 0.781], q: [0, 0.9659, 0, 0.2588], s: [0.4, 0.4, 0.4] },
+      },
+      {
+        name: '11顶部', display: '顶部合构',
+        lore: '铺作最顶端的槫木合构，屋面荷载自此层层下传，一攒五铺作至此功成。',
+        tf: { p: [2.683, 0.87, 1.019], q: [0, 0.9659, 0, 0.2588], s: [0.85, 0.85, 0.85] },
+      },
+    ],
+  },
 ];
 
 let currentLevel = LEVELS[0];
@@ -120,7 +187,7 @@ const glbCache = new Map(); // url → gltf.scene（原始，不直接进场景�
 
 async function loadCached(url) {
   if (glbCache.has(url)) return glbCache.get(url).clone(true);
-  const gltf = await loader.loadAsync(url);
+  const gltf = await loader.loadAsync(encodeAssetUrl(url));
   glbCache.set(url, gltf.scene);
   return gltf.scene.clone(true);
 }
