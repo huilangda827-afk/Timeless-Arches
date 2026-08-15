@@ -1,0 +1,67 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>拾遗补缺 · 游艺坊 · 拾光筑梦</title>
+  <link rel="icon" href="/images/brand/logo-dougong.svg" type="image/svg+xml" />
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Ma+Shan+Zheng&family=Noto+Serif+SC:wght@400;600;900&display=swap" rel="stylesheet" />
+  <link rel="stylesheet" href="/src/repair/repair.css" />
+</head>
+<body>
+
+  <!-- 顶栏 -->
+  <header class="bar">
+    <div class="bar-left">
+      <span class="bar-title">拾遗补缺</span>
+      <span class="bar-sub">残件修复 · 慧眼识构</span>
+    </div>
+    <div class="bar-right">
+      <div class="bar-tabs" id="level-tabs"></div>
+      <button class="bar-btn" id="btn-ghost" title="金色残影标出缺件位置，关闭后全凭对照参照的眼力">残影提示：开</button>
+      <span class="bar-progress" id="bar-progress">缺失 2 件</span>
+      <button class="bar-btn" id="btn-restart">换一局</button>
+      <a class="bar-btn" href="/arcade.html">← 返回游艺坊</a>
+    </div>
+  </header>
+
+  <!-- 3D 舞台 -->
+  <canvas id="gl"></canvas>
+  <div class="loading" id="loading">构件载入中…</div>
+
+  <!-- 场景内文字锚标 -->
+  <div class="stage-label" id="label-ref">完 整 参 照</div>
+  <div class="stage-label" id="label-puzzle">待 修 复</div>
+
+  <!-- 左下：说明 -->
+  <div class="brief">
+    <b id="brief-title">这座「单翘单昂平身科」缺了两件构件。</b>
+    对照左侧完整参照，从下方备选中挑出正确的构件补上——注意，有的备选其实已经在结构里了。
+  </div>
+
+  <!-- 底部：备选构件托盘 -->
+  <div class="tray" id="tray"></div>
+
+  <!-- 知识气泡 -->
+  <div class="lore" id="lore" hidden></div>
+
+  <!-- 结算 -->
+  <div class="result" id="result" hidden>
+    <div class="result-card">
+      <div class="rc-kicker">◆◆◆ 修 复 完 成 ◆◆◆</div>
+      <h2>斗拱复原如初</h2>
+      <p id="rc-body">大斗承重、华拱出挑、散斗匀布——五件构件各司其职，一攒斗拱又能再托千年屋檐。你的眼力已经胜过许多只看热闹的游客了。</p>
+      <div class="rc-actions">
+        <button class="rc-btn outline" id="rc-again">再修一局</button>
+        <a class="rc-btn primary" href="/collection2.html">去藏宝阁看成就 →</a>
+      </div>
+    </div>
+  </div>
+
+  <div class="toast" id="toast"></div>
+
+  <script type="module" src="/src/repair/repair-main.js"></script>
+</body>
+</html>

@@ -1,0 +1,13 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64" width="256" height="256">
+  <!-- 拾光筑梦 · 品牌印记（斗拱印章）
+       用途：网页 logo / favicon / PPT 页眉 / 公众号头像 / 问卷头图
+       主色：朱砂红 #c8392b · 象牙白 #f6efdd -->
+  <rect x="2" y="2" width="60" height="60" rx="12" fill="#c8392b"/>
+  <rect x="29" y="44" width="6" height="12" rx="1.5" fill="#f6efdd"/>
+  <path d="M24 44 L40 44 L44 36 L20 36 Z" fill="#f6efdd"/>
+  <rect x="12" y="29" width="40" height="6" rx="3" fill="#f6efdd"/>
+  <rect x="10" y="18" width="9" height="7" rx="2" fill="#f6efdd"/>
+  <rect x="27.5" y="18" width="9" height="7" rx="2" fill="#f6efdd"/>
+  <rect x="45" y="18" width="9" height="7" rx="2" fill="#f6efdd"/>
+  <path d="M6 14 Q32 4 58 14" fill="none" stroke="#f6efdd" stroke-width="4" stroke-linecap="round"/>
+</svg>

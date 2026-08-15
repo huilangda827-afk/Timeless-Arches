@@ -1,0 +1,79 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>游艺坊 · 拾光筑梦</title>
+  <link rel="icon" href="/images/brand/logo-dougong.svg" type="image/svg+xml" />
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Ma+Shan+Zheng&family=Noto+Serif+SC:wght@400;600;900&family=JetBrains+Mono:wght@400;600&display=swap" rel="stylesheet" />
+  <link rel="stylesheet" href="/src/arcade/arcade.css" />
+</head>
+<body>
+
+  <!-- 顶部导航（与新门户同款） -->
+  <header class="nav">
+    <a class="nav-logo" href="/home2.html">
+      <img class="nav-mark" src="/images/brand/logo-dougong.svg" alt="拾光筑梦" />
+      <span class="nav-word">
+        <b>拾光筑梦</b>
+        <em>TIMELESS ARCHES</em>
+      </span>
+    </a>
+    <nav class="nav-links">
+      <a href="/home2.html">首页</a>
+      <a href="/catalog2.html">万象图鉴</a>
+      <a href="/map2.html">古建舆图</a>
+      <a href="/view2.html">鉴赏</a>
+      <a href="/forge.html">筑梦</a>
+      <a class="on" href="/arcade.html">游艺坊</a>
+      <a href="/collection2.html">藏宝阁</a>
+    </nav>
+  </header>
+
+  <!-- 页头 -->
+  <section class="head">
+    <div class="head-kicker">志于道 · 据于德 · 依于仁 · 游于艺</div>
+    <h1>游艺坊</h1>
+    <p class="head-sub">以戏入学 —— 在游戏里读懂千年木构</p>
+  </section>
+
+  <!-- 斗拱在哪儿：位置标注互动 -->
+  <section class="whereis">
+    <div class="wi-head">
+      <h2><i></i>斗拱在哪儿？</h2>
+      <p>都说斗拱精妙，但它究竟藏在建筑的什么位置——点击下方按钮，亲眼看看</p>
+    </div>
+    <div class="wi-stage">
+      <div class="wi-img-wrap" id="wi-wrap">
+        <img id="wi-img" src="" alt="建筑全貌" />
+        <div class="wi-spots" id="wi-spots"></div>
+      </div>
+      <aside class="wi-side">
+        <div class="wi-tabs" id="wi-tabs"></div>
+        <div class="wi-note" id="wi-note"></div>
+        <button class="wi-reveal" id="wi-reveal">✦ 标出斗拱位置</button>
+        <a class="wi-more" href="/view2.html">去鉴赏页看三维拆解 →</a>
+      </aside>
+    </div>
+  </section>
+
+  <!-- 模式卡片 -->
+  <section class="modes">
+    <div class="modes-head">
+      <h2><i></i>坊中游艺</h2>
+    </div>
+    <div class="mode-grid" id="mode-grid"></div>
+  </section>
+
+  <footer class="footer">
+    拾光筑梦 · 游艺坊 — Demo 预览版
+    <em>成绩与成就记录保存在本地浏览器（藏宝阁可查）</em>
+  </footer>
+
+  <div class="toast" id="toast"></div>
+
+  <script type="module" src="/src/arcade/arcade-main.js"></script>
+</body>
+</html>

@@ -1,0 +1,129 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>拾光筑梦 · 首页 Demo</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Ma+Shan+Zheng&family=Noto+Serif+SC:wght@400;600;900&display=swap" rel="stylesheet" />
+  <link rel="stylesheet" href="/src/home2/home2.css" />
+</head>
+<body>
+
+  <!-- 顶部导航 -->
+  <header class="nav">
+    <a class="nav-logo" href="#top">
+      <svg class="nav-mark" viewBox="0 0 64 64" aria-hidden="true">
+        <rect x="2" y="2" width="60" height="60" rx="12" fill="#c8392b"/>
+        <!-- 极简斗拱：柱 + 栌斗 + 横拱 + 三升 -->
+        <rect x="29" y="44" width="6" height="12" rx="1.5" fill="#f6efdd"/>
+        <path d="M24 44 L40 44 L44 36 L20 36 Z" fill="#f6efdd"/>
+        <rect x="12" y="29" width="40" height="6" rx="3" fill="#f6efdd"/>
+        <rect x="10" y="18" width="9" height="7" rx="2" fill="#f6efdd"/>
+        <rect x="27.5" y="18" width="9" height="7" rx="2" fill="#f6efdd"/>
+        <rect x="45" y="18" width="9" height="7" rx="2" fill="#f6efdd"/>
+        <path d="M6 14 Q32 4 58 14" fill="none" stroke="#f6efdd" stroke-width="4" stroke-linecap="round"/>
+      </svg>
+      <span class="nav-word">
+        <b>拾光筑梦</b>
+        <em>TIMELESS ARCHES</em>
+      </span>
+    </a>
+    <nav class="nav-links">
+      <a href="/catalog2.html">万象图鉴</a>
+      <a href="/map2.html">古建舆图</a>
+      <a href="/view2.html">鉴赏</a>
+      <a href="/forge.html">筑梦</a>
+      <a href="/arcade.html">游艺坊</a>
+      <a href="/collection2.html">藏宝阁</a>
+    </nav>
+  </header>
+
+  <!-- ============ 第一幕 · 图片墙沉浸开篇 ============ -->
+  <section class="hero" id="top">
+    <div class="hero-mosaic" id="hero-mosaic"></div>
+    <div class="hero-shade"></div>
+    <div class="hero-center">
+      <h1 class="hero-title">拾光筑梦</h1>
+      <div class="hero-en">TIMELESS&nbsp;ARCHES</div>
+      <p class="hero-slogan">指尖重现千年斗拱 · 在互动中看见中国古建的结构与智慧</p>
+      <a class="hero-cta" href="#realms">开启体验</a>
+    </div>
+    <div class="hero-stats">
+      <div class="stat"><b id="st-1">15</b><span>收录古建 / 处</span></div>
+      <div class="stat"><b id="st-2">15</b><span>三维模型 / 座</span></div>
+      <div class="stat"><b id="st-3">28</b><span>斗拱构件 / 件</span></div>
+      <div class="stat"><b id="st-4">7</b><span>体验模块 / 个</span></div>
+    </div>
+  </section>
+
+  <!-- ============ 第二幕 · 六境选择器（仿石窟选择） ============ -->
+  <section class="realms" id="realms">
+    <div class="realms-bg"></div>
+    <div class="realms-inner reveal">
+      <div class="realms-text">
+        <div class="realms-kicker">六境体验</div>
+        <h2 class="realms-name" id="realm-name">万象图鉴</h2>
+        <p class="realms-poem" id="realm-poem">览尽千构</p>
+        <p class="realms-desc" id="realm-desc">代表性古建案例总览，从民居到皇宫，建立对中国木构建筑的整体认知。</p>
+        <a class="realms-enter" id="realm-enter" href="/catalog2.html">进 入</a>
+      </div>
+      <div class="realms-arch">
+        <img id="realm-img" src="/images/鉴赏/大明宫含元殿_全貌.png" alt="模块预览" />
+      </div>
+    </div>
+    <div class="realms-nav" id="realms-nav"></div>
+  </section>
+
+  <!-- ============ 第三幕 · 古建长廊（浅色 · 移动的画像） ============ -->
+  <section class="gallery">
+    <div class="gal-head reveal">
+      <div>
+        <h2>古建长廊</h2>
+        <p>民居 · 官府 · 皇宫 · 桥梁 —— 一千年的木构风景</p>
+      </div>
+      <a class="gal-more" href="/view2.html">进入鉴赏</a>
+    </div>
+    <div class="marquee reveal">
+      <div class="marquee-track" id="marquee-track"></div>
+    </div>
+  </section>
+
+  <!-- ============ 第四幕 · 斗拱之秘（深色 · 3D 文物） ============ -->
+  <section class="relic">
+    <div class="relic-inner reveal">
+      <div class="relic-text">
+        <div class="realms-kicker">探微 · 构件志</div>
+        <h2>斗拱之秘</h2>
+        <p class="relic-sub">与千年营造智慧的一次邂逅</p>
+        <ul class="relic-list">
+          <li>栌斗 —— 承托全攒之基</li>
+          <li>华拱 —— 层层出挑之臂</li>
+          <li>琴面昂 —— 斜出取势之杠杆</li>
+          <li>耍头 —— 收束檐口之末端</li>
+          <li>撩檐榑 —— 托举飞檐之横梁</li>
+        </ul>
+        <a class="relic-enter" href="/explore2.html">进入探微</a>
+      </div>
+      <div class="relic-stage">
+        <canvas id="relic-canvas"></canvas>
+        <div class="hero-loading" id="relic-loading">营造中<span class="dots"></span></div>
+      </div>
+    </div>
+  </section>
+
+  <!-- ============ 尾幕 ============ -->
+  <section class="outro reveal">
+    <p class="outro-quote">千年前，李诫落笔《营造法式》，以笔墨镌刻木构风骨；<br>今朝，以代码复刻斗拱形制。</p>
+    <a class="outro-cta" href="/catalog2.html">进入拾光筑梦</a>
+  </section>
+
+  <footer class="footer">
+    拾光筑梦 · 古建数字交互传承平台 — Demo 预览版
+    <em>部分实景图片来源：Wikimedia Commons（公有领域 / CC BY-SA），及项目组实拍</em>
+  </footer>
+
+  <script type="module" src="/src/home2/home2-main.js"></script>
+</body>
+</html>

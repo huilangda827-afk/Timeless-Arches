@@ -107,7 +107,7 @@
 
   <!-- ========== 左：建筑列表 ========== -->
   <aside class="sidebar">
-    <h2>建筑（共 9 处）</h2>
+    <h2>建筑（共 15 处）</h2>
     <div class="hint">
       ① 点选下方建筑 →<br/>
       ② 在右侧地图上左键单击 = 落点<br/>
@@ -175,15 +175,21 @@
 // 9 个建筑（与 buildings.js 保持同步；只用到 id + shortName + location）
 // ============================================================
 const BUILDINGS = [
-  { id: 'wanchunting',       shortName: '万春亭',     location: '北京 · 紫禁城御花园' },
-  { id: 'hanyuandian',       shortName: '含元殿',     location: '陕西 · 西安' },
-  { id: 'guanfu',            shortName: '宋金官府',   location: '全国通用规制' },
-  { id: 'sanchuque',         shortName: '三出阙',     location: '陕西 · 西安' },
-  { id: 'xian-gulou',        shortName: '西安鼓楼',   location: '陕西 · 西安' },
-  { id: 'jishi-minju',       shortName: '姬氏民居',   location: '山西 · 晋城高平' },
-  { id: 'pingyao-xianya',    shortName: '平遥县衙',   location: '山西 · 平遥' },
-  { id: 'niuwangmiao-xitai', shortName: '牛王庙戏台', location: '山西 · 临汾' },
-  { id: 'rishengchang',      shortName: '日昇昌票号', location: '山西 · 平遥' },
+  { id: 'wanchunting',         shortName: '万春亭',       location: '北京 · 紫禁城御花园' },
+  { id: 'hanyuandian',         shortName: '含元殿',       location: '陕西 · 西安' },
+  { id: 'guanfu',              shortName: '宋金官府',     location: '全国通用规制' },
+  { id: 'sanchuque',           shortName: '三出阙',       location: '陕西 · 西安' },
+  { id: 'xian-gulou',          shortName: '西安鼓楼',     location: '陕西 · 西安' },
+  { id: 'jishi-minju',         shortName: '姬氏民居',     location: '山西 · 晋城高平' },
+  { id: 'pingyao-xianya',      shortName: '平遥县衙',     location: '山西 · 平遥' },
+  { id: 'niuwangmiao-xitai',   shortName: '牛王庙戏台',   location: '山西 · 临汾' },
+  { id: 'rishengchang',        shortName: '日昇昌票号',   location: '山西 · 平遥' },
+  { id: 'tiantai-an',          shortName: '天台庵大殿',   location: '山西 · 长治平顺' },
+  { id: 'pingyao-wenmiao',     shortName: '平遥文庙',     location: '山西 · 平遥' },
+  { id: 'jinci-shengmudian',   shortName: '晋祠圣母殿',   location: '山西 · 太原晋源' },
+  { id: 'jinci-xiandian',      shortName: '晋祠献殿',     location: '山西 · 太原晋源' },
+  { id: 'xingguosi-boruodian', shortName: '般若殿',       location: '甘肃 · 天水秦安' },
+  { id: 'xingguosi-xiegong',   shortName: '般若殿斜栱',   location: '甘肃 · 天水秦安' },
 ];
 
 // ============================================================
@@ -217,22 +223,43 @@ function resetView() {
 }
 
 // ============================================================
-// 启动：从 / 提取 MOCKUP_IMG.map base64
+// 启动：直接加载 public/images/mockups/map.png（dev/prod 一致）
+// 历史方案是 fetch /index.html 用正则抠 MOCKUP_IMG.map base64，prod 构建后会失效。
 // ============================================================
 async function loadMapImage() {
   const loading = document.getElementById('loading');
+  // 候选源：优先静态 PNG（最稳）；如失败再回退到老的 base64 抽取（兼容历史）
+  const sources = ['/images/mockups/map.png'];
   try {
+    let lastErr = null;
+    for (const src of sources) {
+      try {
+        const img = document.getElementById('map-img');
+        await new Promise((resolve, reject) => {
+          img.onload = resolve;
+          img.onerror = () => reject(new Error('图片加载失败: ' + src));
+          img.src = src;
+        });
+        mapImg = img;
+        loading.style.display = 'none';
+        document.getElementById('stage-inner').style.display = 'grid';
+        document.getElementById('hud-coord').style.display = 'block';
+        document.getElementById('zoom-bar').style.display = 'flex';
+        return;
+      } catch (e) {
+        lastErr = e;
+      }
+    }
+    // fallback：从 /index.html 抠 base64（dev 模式下用）
     const res = await fetch('/index.html');
     const html = await res.text();
-    // MOCKUP_IMG.map 形如  map: "data:image/png;base64,XXXXXXXX",
     const m = html.match(/map:\s*"(data:image\/[^"]+)"/);
-    if (!m) throw new Error('未在 index.html 中找到 MOCKUP_IMG.map');
-    const dataUrl = m[1];
+    if (!m) throw lastErr || new Error('未找到地图资源');
     const img = document.getElementById('map-img');
     await new Promise((resolve, reject) => {
       img.onload = resolve;
       img.onerror = () => reject(new Error('地图 base64 解码失败'));
-      img.src = dataUrl;
+      img.src = m[1];
     });
     mapImg = img;
     loading.style.display = 'none';
@@ -240,7 +267,7 @@ async function loadMapImage() {
     document.getElementById('hud-coord').style.display = 'block';
     document.getElementById('zoom-bar').style.display = 'flex';
   } catch (e) {
-    loading.innerHTML = `<span class="err">❌ ${e.message}</span><br/><br/>请确认 dev server 已启动（<code>npm run dev</code>）`;
+    loading.innerHTML = `<span class="err">❌ ${e.message}</span><br/><br/>请确认 <code>public/images/mockups/map.png</code> 已部署到线上`;
     throw e;
   }
 }

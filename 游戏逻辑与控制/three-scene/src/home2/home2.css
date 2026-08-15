@@ -1,0 +1,740 @@
+/* ============================================================
+   拾光筑梦 · 首页 Demo v2（深色沉浸版）
+   参照：数字敦煌开放素材库（图片墙 hero + 数据栏）
+        自选素材页（深色 + 拱形图 + 底部图标导航）
+        壁画专题页（浅色卡片区做节奏变化）
+   ============================================================ */
+
+:root {
+  --night: #17110b;
+  --night-2: #221a10;
+  --ivory: #f3ead9;
+  --ivory-dim: rgba(243, 234, 217, 0.62);
+  --red: #c8392b;
+  --red-deep: #97281d;
+  --gold: #c9a24b;
+  --paper: #f4efe4;
+  --ink: #2b2318;
+  --serif: 'Noto Serif SC', 'STSong', 'SimSun', serif;
+  --calli: 'Ma Shan Zheng', 'STKaiti', 'KaiTi', serif;
+}
+
+* { margin: 0; padding: 0; box-sizing: border-box; }
+html { scroll-behavior: smooth; }
+
+body {
+  font-family: var(--serif);
+  background: var(--night);
+  color: var(--ivory);
+  overflow-x: hidden;
+}
+
+/* ---------------- 导航 ---------------- */
+.nav {
+  position: fixed;
+  top: 0; left: 0; right: 0;
+  z-index: 100;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 14px 44px;
+  background: linear-gradient(to bottom, rgba(13, 10, 6, 0.85), rgba(13, 10, 6, 0));
+}
+
+.nav-logo {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  text-decoration: none;
+}
+
+.nav-mark {
+  width: 40px;
+  height: 40px;
+  filter: drop-shadow(0 2px 8px rgba(200, 57, 43, 0.45));
+  transition: transform 0.35s cubic-bezier(0.34, 1.56, 0.64, 1);
+}
+
+.nav-logo:hover .nav-mark { transform: rotate(-6deg) scale(1.06); }
+
+.nav-word {
+  display: flex;
+  flex-direction: column;
+  line-height: 1;
+  gap: 4px;
+}
+
+/* 签名式书法字标 */
+.nav-word b {
+  font-family: var(--calli);
+  font-weight: 400;
+  font-size: 25px;
+  letter-spacing: 0.14em;
+  color: var(--ivory);
+  text-shadow: 0 1px 6px rgba(0, 0, 0, 0.5);
+}
+
+.nav-word em {
+  font-style: normal;
+  font-size: 9.5px;
+  letter-spacing: 0.42em;
+  color: var(--ivory-dim);
+}
+
+.nav-links { display: flex; gap: 30px; }
+
+.nav-links a {
+  color: rgba(243, 234, 217, 0.82);
+  text-decoration: none;
+  font-size: 15px;
+  letter-spacing: 0.18em;
+  padding-bottom: 4px;
+  position: relative;
+  transition: color 0.3s;
+}
+
+.nav-links a::after {
+  content: '';
+  position: absolute;
+  left: 50%; bottom: 0;
+  width: 0; height: 2px;
+  background: var(--red);
+  transition: all 0.3s ease;
+  transform: translateX(-50%);
+}
+
+.nav-links a:hover { color: #fff; }
+.nav-links a:hover::after { width: 100%; }
+
+/* ---------------- 第一幕 · 图片墙 Hero ---------------- */
+.hero {
+  position: relative;
+  height: 100vh;
+  min-height: 640px;
+  overflow: hidden;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+/* 倾斜图片墙：缝隙 4px，整体缓慢漂移 */
+.hero-mosaic {
+  position: absolute;
+  inset: -30% -18%;
+  display: grid;
+  grid-template-columns: repeat(8, 1fr);
+  grid-auto-rows: 158px;
+  gap: 4px;
+  transform: rotate(-7deg);
+  animation: mosaic-drift 26s linear infinite alternate;
+}
+
+@keyframes mosaic-drift {
+  from { transform: rotate(-7deg) translate3d(0, 0, 0); }
+  to { transform: rotate(-7deg) translate3d(-3.5%, -4%, 0); }
+}
+
+.hero-mosaic .tile {
+  overflow: hidden;
+  background: #241b10;
+}
+
+.hero-mosaic .tile.w2 { grid-column: span 2; }
+.hero-mosaic .tile.h2 { grid-row: span 2; }
+
+.hero-mosaic img {
+  width: 100%; height: 100%;
+  object-fit: cover;
+  filter: saturate(1.12) brightness(0.92);
+}
+
+/* 深色渐变遮罩：中央留出可读区，四周与底部渐深 */
+.hero-shade {
+  position: absolute;
+  inset: 0;
+  background:
+    radial-gradient(ellipse 62% 55% at 50% 44%, rgba(15, 11, 7, 0.62) 0%, rgba(15, 11, 7, 0.42) 55%, rgba(15, 11, 7, 0.16) 100%),
+    linear-gradient(to bottom, rgba(15, 11, 7, 0.72) 0%, rgba(15, 11, 7, 0.08) 26%, rgba(15, 11, 7, 0.05) 62%, rgba(15, 11, 7, 0.9) 100%);
+}
+
+.hero-center {
+  position: relative;
+  z-index: 2;
+  text-align: center;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 20px;
+  padding: 0 6vw;
+}
+
+.hero-title {
+  font-family: var(--calli);
+  font-size: clamp(66px, 9vw, 130px);
+  letter-spacing: 0.22em;
+  text-indent: 0.22em;
+  color: var(--ivory);
+  text-shadow:
+    0 0 44px rgba(201, 162, 75, 0.4),
+    0 4px 28px rgba(0, 0, 0, 0.75);
+  animation: title-in 1.5s cubic-bezier(0.22, 1, 0.36, 1) both;
+}
+
+.hero-en {
+  font-size: 15px;
+  letter-spacing: 0.72em;
+  text-indent: 0.72em;
+  color: var(--gold);
+  animation: fade-up 1.2s 0.5s both;
+}
+
+.hero-slogan {
+  font-size: clamp(14px, 1.4vw, 18px);
+  letter-spacing: 0.3em;
+  color: rgba(243, 234, 217, 0.92);
+  text-shadow: 0 2px 12px rgba(0, 0, 0, 0.8);
+  animation: fade-up 1.2s 0.7s both;
+}
+
+.hero-cta {
+  margin-top: 10px;
+  padding: 14px 58px;
+  background: var(--red);
+  color: #fff;
+  text-decoration: none;
+  font-size: 17px;
+  letter-spacing: 0.5em;
+  text-indent: 0.5em;
+  border-radius: 3px;
+  box-shadow: 0 8px 30px rgba(200, 57, 43, 0.45);
+  transition: all 0.3s;
+  animation: fade-up 1.2s 0.9s both;
+}
+
+.hero-cta:hover {
+  background: #dc4534;
+  transform: translateY(-3px);
+  box-shadow: 0 14px 38px rgba(200, 57, 43, 0.6);
+}
+
+@keyframes title-in {
+  from { opacity: 0; filter: blur(16px); transform: translateY(24px); }
+  to { opacity: 1; filter: blur(0); transform: none; }
+}
+
+@keyframes fade-up {
+  from { opacity: 0; transform: translateY(22px); }
+  to { opacity: 1; transform: none; }
+}
+
+/* 底部数据栏（仿敦煌素材库统计行） */
+.hero-stats {
+  position: absolute;
+  left: 0; right: 0; bottom: 0;
+  z-index: 2;
+  display: flex;
+  justify-content: center;
+  gap: clamp(40px, 9vw, 150px);
+  padding: 26px 6vw 30px;
+  animation: fade-up 1.2s 1.15s both;
+}
+
+.stat {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 5px;
+}
+
+.stat b {
+  font-size: clamp(26px, 2.6vw, 38px);
+  font-weight: 900;
+  color: #fff;
+  text-shadow: 0 2px 14px rgba(0, 0, 0, 0.8);
+}
+
+.stat span {
+  font-size: 12.5px;
+  letter-spacing: 0.22em;
+  color: var(--ivory-dim);
+}
+
+/* ---------------- 第二幕 · 六境选择器 ---------------- */
+.realms {
+  position: relative;
+  padding: 100px 7vw 70px;
+  overflow: hidden;
+}
+
+/* 背景：山崖民居灯笼夜景 + 深色遮罩（拒绝纯色） */
+.realms-bg {
+  position: absolute;
+  inset: 0;
+  background-image:
+    linear-gradient(to bottom, rgba(18, 13, 8, 0.9), rgba(24, 17, 10, 0.82) 50%, rgba(18, 13, 8, 0.94)),
+    url('/images/home2/25.jpg');
+  background-size: cover, cover;
+  background-position: center 38%;
+  filter: blur(2px) saturate(1.1);
+  transform: scale(1.05);
+}
+
+.realms-inner {
+  position: relative;
+  z-index: 2;
+  display: flex;
+  align-items: center;
+  gap: 7vw;
+  max-width: 1280px;
+  margin: 0 auto;
+}
+
+.realms-text { flex: 1; }
+
+.realms-kicker {
+  display: inline-block;
+  font-size: 13px;
+  letter-spacing: 0.45em;
+  color: var(--gold);
+  border: 1px solid rgba(201, 162, 75, 0.45);
+  padding: 6px 16px 6px 20px;
+  border-radius: 2px;
+  margin-bottom: 26px;
+}
+
+.realms-name {
+  font-size: clamp(40px, 4.4vw, 62px);
+  font-weight: 900;
+  letter-spacing: 0.14em;
+  color: #fff;
+  margin-bottom: 12px;
+}
+
+.realms-poem {
+  font-family: var(--calli);
+  font-size: 26px;
+  letter-spacing: 0.3em;
+  color: var(--gold);
+  margin-bottom: 20px;
+}
+
+.realms-desc {
+  font-size: 15px;
+  line-height: 2.1;
+  letter-spacing: 0.12em;
+  color: var(--ivory-dim);
+  max-width: 430px;
+  margin-bottom: 34px;
+  min-height: 63px;
+}
+
+.realms-enter {
+  display: inline-block;
+  padding: 12px 46px;
+  background: var(--red);
+  color: #fff;
+  text-decoration: none;
+  font-size: 16px;
+  letter-spacing: 0.4em;
+  text-indent: 0.4em;
+  border-radius: 3px;
+  transition: all 0.3s;
+  box-shadow: 0 6px 24px rgba(200, 57, 43, 0.4);
+}
+
+.realms-enter:hover { background: #dc4534; transform: translateY(-2px); }
+
+/* 拱门形大图 */
+.realms-arch {
+  width: min(400px, 34vw);
+  aspect-ratio: 4 / 5;
+  border-radius: 999px 999px 8px 8px;
+  overflow: hidden;
+  box-shadow:
+    0 0 0 1px rgba(201, 162, 75, 0.35),
+    0 0 0 10px rgba(201, 162, 75, 0.07),
+    0 30px 70px rgba(0, 0, 0, 0.6);
+  flex-shrink: 0;
+}
+
+.realms-arch img {
+  width: 100%; height: 100%;
+  object-fit: cover;
+  transition: opacity 0.45s ease;
+}
+
+.realms-arch img.fading { opacity: 0; }
+
+/* 底部图标导航（仿石窟选择行） */
+.realms-nav {
+  position: relative;
+  z-index: 2;
+  display: flex;
+  justify-content: center;
+  gap: clamp(26px, 5vw, 74px);
+  margin-top: 70px;
+  padding-top: 34px;
+  border-top: 1px solid rgba(243, 234, 217, 0.14);
+}
+
+.rn-item {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 12px;
+  background: none;
+  border: none;
+  cursor: pointer;
+  font-family: var(--serif);
+}
+
+.rn-icon {
+  width: 62px; height: 62px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border: 1.5px solid rgba(243, 234, 217, 0.4);
+  border-radius: 50%;
+  font-family: var(--calli);
+  font-size: 26px;
+  color: rgba(243, 234, 217, 0.72);
+  transition: all 0.3s;
+}
+
+.rn-label {
+  font-size: 13.5px;
+  letter-spacing: 0.2em;
+  color: rgba(243, 234, 217, 0.62);
+  transition: color 0.3s;
+}
+
+.rn-item:hover .rn-icon { border-color: var(--gold); color: var(--gold); }
+
+.rn-item.on .rn-icon {
+  border-color: var(--red);
+  color: #fff;
+  background: var(--red);
+  box-shadow: 0 0 24px rgba(200, 57, 43, 0.55);
+}
+
+.rn-item.on .rn-label { color: #fff; }
+
+/* ---------------- 第三幕 · 古建长廊（浅色区） ---------------- */
+.gallery {
+  position: relative;
+  /* 略提亮的暖宣纸底 + 回纹印花（低透明度线稿，营造古建织物感） */
+  background:
+    radial-gradient(ellipse 90% 70% at 15% 0%, rgba(214, 192, 148, 0.28), transparent 55%),
+    radial-gradient(ellipse 80% 60% at 90% 100%, rgba(200, 57, 43, 0.07), transparent 60%),
+    url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='96' height='96' viewBox='0 0 96 96'%3E%3Cg fill='none' stroke='%238a7350' stroke-opacity='0.13' stroke-width='2'%3E%3Cpath d='M16 64 V24 h40 v28 H28 V36 h16'/%3E%3Cpath d='M80 32 v40 H40 v-8'/%3E%3C/g%3E%3C/svg%3E"),
+    #f8f3e8;
+  color: var(--ink);
+  padding: 130px 0 140px;
+}
+
+/* 上下过渡带：让深色区柔和地"晕"进浅色区，避免生硬切换 */
+.gallery::before,
+.gallery::after {
+  content: '';
+  position: absolute;
+  left: 0; right: 0;
+  height: 110px;
+  pointer-events: none;
+  z-index: 1;
+}
+
+.gallery::before {
+  top: 0;
+  background: linear-gradient(to bottom, rgba(23, 17, 11, 0.55), rgba(23, 17, 11, 0.18) 45%, transparent);
+}
+
+.gallery::after {
+  bottom: 0;
+  background: linear-gradient(to top, rgba(27, 20, 12, 0.5), rgba(27, 20, 12, 0.16) 45%, transparent);
+}
+
+.gal-head {
+  display: flex;
+  align-items: flex-end;
+  justify-content: space-between;
+  max-width: 1280px;
+  margin: 0 auto 44px;
+  padding: 0 7vw;
+}
+
+.gal-head h2 {
+  font-size: clamp(30px, 3.2vw, 44px);
+  font-weight: 900;
+  letter-spacing: 0.18em;
+  color: var(--ink);
+  margin-bottom: 10px;
+}
+
+.gal-head p {
+  font-size: 13.5px;
+  letter-spacing: 0.28em;
+  color: rgba(43, 35, 24, 0.6);
+}
+
+.gal-more {
+  padding: 10px 28px;
+  background: var(--red);
+  color: #fff;
+  text-decoration: none;
+  font-size: 14px;
+  letter-spacing: 0.24em;
+  border-radius: 3px;
+  transition: all 0.3s;
+  flex-shrink: 0;
+}
+
+.gal-more:hover { background: #dc4534; box-shadow: 0 6px 20px rgba(200, 57, 43, 0.35); }
+
+.marquee {
+  overflow: hidden;
+  -webkit-mask-image: linear-gradient(to right, transparent, #000 6%, #000 94%, transparent);
+  mask-image: linear-gradient(to right, transparent, #000 6%, #000 94%, transparent);
+}
+
+.marquee-track {
+  display: flex;
+  gap: 10px; /* 缝隙收紧 */
+  width: max-content;
+  animation: marquee 58s linear infinite;
+}
+
+.marquee:hover .marquee-track { animation-play-state: paused; }
+
+@keyframes marquee {
+  from { transform: translateX(0); }
+  to { transform: translateX(-50%); }
+}
+
+.g-card {
+  position: relative;
+  width: 356px; height: 250px;
+  overflow: hidden;
+  border-radius: 6px;
+  box-shadow: 0 8px 26px rgba(50, 38, 22, 0.22);
+  flex-shrink: 0;
+  cursor: pointer;
+}
+
+.g-card img {
+  width: 100%; height: 100%;
+  object-fit: cover;
+  animation: kenburns 15s ease-in-out infinite alternate;
+}
+
+@keyframes kenburns {
+  from { transform: scale(1); }
+  to { transform: scale(1.13) translate(-2%, -1.6%); }
+}
+
+.g-card::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  background: linear-gradient(to top, rgba(20, 14, 8, 0.62), transparent 42%);
+}
+
+.g-card .g-name {
+  position: absolute;
+  left: 14px; bottom: 12px;
+  z-index: 2;
+  font-size: 17px;
+  font-weight: 600;
+  letter-spacing: 0.18em;
+  color: #fff;
+  text-shadow: 0 2px 8px rgba(0, 0, 0, 0.6);
+}
+
+.g-card .g-era {
+  position: absolute;
+  right: 12px; bottom: 14px;
+  z-index: 2;
+  font-size: 12px;
+  letter-spacing: 0.14em;
+  color: rgba(255, 255, 255, 0.85);
+}
+
+/* ---------------- 第四幕 · 斗拱之秘（深色 3D） ---------------- */
+.relic {
+  position: relative;
+  background:
+    radial-gradient(ellipse 70% 90% at 82% 30%, rgba(201, 162, 75, 0.12), transparent 60%),
+    radial-gradient(ellipse 60% 80% at 10% 90%, rgba(200, 57, 43, 0.1), transparent 55%),
+    linear-gradient(160deg, #1b140c 0%, #241a0f 55%, #171008 100%);
+  padding: 110px 7vw;
+}
+
+.relic-inner {
+  display: flex;
+  align-items: center;
+  gap: 6vw;
+  max-width: 1280px;
+  margin: 0 auto;
+}
+
+.relic-text { flex: 1; }
+
+.relic-text h2 {
+  font-size: clamp(38px, 4.2vw, 58px);
+  font-weight: 900;
+  letter-spacing: 0.16em;
+  color: #fff;
+  margin-bottom: 10px;
+}
+
+.relic-sub {
+  font-size: 14px;
+  letter-spacing: 0.3em;
+  color: var(--ivory-dim);
+  margin-bottom: 36px;
+}
+
+.relic-list {
+  list-style: none;
+  margin-bottom: 40px;
+}
+
+.relic-list li {
+  position: relative;
+  padding: 10px 0 10px 26px;
+  font-size: 15.5px;
+  letter-spacing: 0.14em;
+  color: rgba(243, 234, 217, 0.85);
+  border-bottom: 1px solid rgba(243, 234, 217, 0.09);
+}
+
+.relic-list li::before {
+  content: '';
+  position: absolute;
+  left: 4px; top: 50%;
+  width: 7px; height: 7px;
+  border-radius: 50%;
+  background: var(--red);
+  transform: translateY(-50%);
+  box-shadow: 0 0 10px rgba(200, 57, 43, 0.7);
+}
+
+.relic-enter {
+  display: inline-block;
+  padding: 12px 46px;
+  border: 1.5px solid var(--gold);
+  color: var(--gold);
+  text-decoration: none;
+  font-size: 16px;
+  letter-spacing: 0.4em;
+  text-indent: 0.4em;
+  border-radius: 3px;
+  transition: all 0.3s;
+}
+
+.relic-enter:hover { background: var(--gold); color: #1b140c; }
+
+.relic-stage {
+  position: relative;
+  flex: 1.15;
+  height: 560px;
+  min-width: 0;
+}
+
+#relic-canvas { width: 100%; height: 100%; display: block; }
+
+.hero-loading {
+  position: absolute;
+  left: 50%; top: 50%;
+  transform: translate(-50%, -50%);
+  font-size: 14px;
+  letter-spacing: 0.5em;
+  color: var(--ivory-dim);
+  pointer-events: none;
+  transition: opacity 0.8s;
+}
+
+.hero-loading.done { opacity: 0; }
+
+.dots::after { content: '…'; animation: dots 1.6s steps(4) infinite; }
+
+@keyframes dots {
+  0% { content: ''; }
+  25% { content: '·'; }
+  50% { content: '··'; }
+  75% { content: '···'; }
+}
+
+/* ---------------- 尾幕 ---------------- */
+.outro {
+  padding: 120px 8vw;
+  text-align: center;
+  background:
+    radial-gradient(ellipse 75% 100% at 50% 100%, rgba(151, 40, 29, 0.4), transparent 62%),
+    #140e08;
+}
+
+.outro-quote {
+  font-size: clamp(17px, 1.9vw, 23px);
+  line-height: 2.4;
+  letter-spacing: 0.26em;
+  color: var(--ivory);
+  margin-bottom: 50px;
+}
+
+.outro-cta {
+  display: inline-block;
+  padding: 16px 66px;
+  background: var(--red);
+  color: #fff;
+  text-decoration: none;
+  font-size: 17px;
+  letter-spacing: 0.5em;
+  text-indent: 0.5em;
+  border-radius: 3px;
+  transition: all 0.3s;
+  box-shadow: 0 10px 32px rgba(200, 57, 43, 0.45);
+}
+
+.outro-cta:hover { background: #dc4534; transform: translateY(-3px); }
+
+.footer {
+  padding: 26px;
+  text-align: center;
+  font-size: 12.5px;
+  letter-spacing: 0.24em;
+  color: rgba(243, 234, 217, 0.45);
+  background: #100b06;
+}
+
+.footer em {
+  display: block;
+  margin-top: 8px;
+  font-style: normal;
+  font-size: 11px;
+  letter-spacing: 0.12em;
+  color: rgba(243, 234, 217, 0.3);
+}
+
+/* ---------------- 滚动渐显 ---------------- */
+.reveal {
+  opacity: 0;
+  transform: translateY(44px);
+  transition: opacity 1s cubic-bezier(0.22, 1, 0.36, 1), transform 1s cubic-bezier(0.22, 1, 0.36, 1);
+}
+
+.reveal.on { opacity: 1; transform: none; }
+
+/* ---------------- 响应式 ---------------- */
+@media (max-width: 1024px) {
+  .nav-links { display: none; }
+  .realms-inner { flex-direction: column-reverse; }
+  .realms-arch { width: min(360px, 76vw); }
+  .relic-inner { flex-direction: column; }
+  .relic-stage { width: 100%; height: 400px; }
+  .hero-stats { flex-wrap: wrap; gap: 30px; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .marquee-track, .g-card img, .hero-mosaic { animation: none; }
+  .reveal { opacity: 1; transform: none; transition: none; }
+}

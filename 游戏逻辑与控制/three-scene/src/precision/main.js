@@ -11,6 +11,8 @@ import { TransformControls } from 'three/addons/controls/TransformControls.js';
 import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js';
 import { PRECISION_LEVELS, DIFFICULTY, getLevelById } from './levels.js';
 import * as BGM from '../portal/bgm.js';
+import { markPrecision } from '../shared/records.js';
+import { encodeAssetUrl } from '../shared/asset-url.js';
 
 // ---------- DOM ----------
 const $ = (id) => document.getElementById(id);
@@ -54,6 +56,8 @@ scene.add(dir);
 const grid = new THREE.GridHelper(10, 10, 0x554a3a, 0x33291f);
 scene.add(grid);
 const axes = new THREE.AxesHelper(1.5);
+// 世界坐标轴与 gizmo 同一套主题色：X 朱砂 / Y 鎏金 / Z 青玉
+axes.setColors(new THREE.Color(0xc8392b), new THREE.Color(0xc9a24b), new THREE.Color(0x6fa3a8));
 axes.visible = false;
 scene.add(axes);
 
@@ -67,10 +71,40 @@ orbit.maxDistance = 30;
 // TransformControls（gizmo 拖拽）
 // three 0.166+ 起 TransformControls 的 gizmo 实体在 _root 上，必须用 getHelper() 加到场景里
 const tc = new TransformControls(camera, renderer.domElement);
-tc.setSize(1.2);
+tc.setSize(0.85); // 原 1.2 过于粗大抢戏，缩小并重新配色（见 stylizeGizmo）
 tc.setMode('translate');
 const tcHelper = tc.getHelper ? tc.getHelper() : tc;
 scene.add(tcHelper);
+
+// Gizmo 主题化：把默认的荧光红绿蓝重映射为 X 朱砂 / Y 鎏金 / Z 青玉。
+// 注意：TransformControls 每帧会用 material._color 还原颜色（hover 高亮机制），
+// 所以必须同时改 color 与 _color 两处才能持久生效。
+function stylizeGizmo() {
+  const THEME = {
+    x: new THREE.Color(0xc8392b), // 朱砂
+    y: new THREE.Color(0xc9a24b), // 鎏金
+    z: new THREE.Color(0x6fa3a8), // 青玉
+  };
+  tcHelper.traverse((n) => {
+    const mats = Array.isArray(n.material) ? n.material : (n.material ? [n.material] : []);
+    for (const m of mats) {
+      const ref = m._color || m.color;
+      if (!ref) continue;
+      // 按主导通道识别轴向（默认材质为纯 R / 纯 G / 纯 B）
+      let mapped = null;
+      if (ref.r > 0.6 && ref.g < 0.45 && ref.b < 0.45) mapped = THEME.x;
+      else if (ref.g > 0.6 && ref.r < 0.45 && ref.b < 0.45) mapped = THEME.y;
+      else if (ref.b > 0.6 && ref.r < 0.45 && ref.g < 0.6) mapped = THEME.z;
+      if (mapped) {
+        m.color.copy(mapped);
+        if (m._color) m._color.copy(mapped);
+      }
+      // 整体柔化：避免实心块状的生硬感
+      if (m.transparent && m.opacity > 0.92) m.opacity = 0.92;
+    }
+  });
+}
+stylizeGizmo();
 tc.addEventListener('dragging-changed', (e) => { orbit.enabled = !e.value; });
 tc.addEventListener('change', () => {
   if (!selectedPiece) return;
@@ -119,7 +153,7 @@ async function loadAll() {
   status('载入背景场景…');
   // 背景
   try {
-    const env = await gltfLoader.loadAsync(LEVEL.environmentPath);
+    const env = await gltfLoader.loadAsync(encodeAssetUrl(LEVEL.environmentPath));
     envObj = env.scene;
     if (LEVEL.environmentTransform) applyTf(envObj, LEVEL.environmentTransform);
     envObj.traverse((n) => { if (n.isMesh) n.castShadow = false; });
@@ -130,7 +164,7 @@ async function loadAll() {
   status('载入参考实物…');
   if (LEVEL.showcasePath) {
     try {
-      const sc = await gltfLoader.loadAsync(LEVEL.showcasePath);
+      const sc = await gltfLoader.loadAsync(encodeAssetUrl(LEVEL.showcasePath));
       showcaseObj = sc.scene;
       if (LEVEL.showcaseTransform) applyTf(showcaseObj, LEVEL.showcaseTransform);
       scene.add(showcaseObj);
@@ -146,7 +180,7 @@ async function loadAll() {
     const name = LEVEL.pieceNames[i];
     const url = LEVEL.piecePathPrefix + name + '.glb';
     try {
-      const gltf = await gltfLoader.loadAsync(url);
+      const gltf = await gltfLoader.loadAsync(encodeAssetUrl(url));
       const obj = gltf.scene;
       const dock = LEVEL.dockOverrides[name];
       const target = LEVEL.targetOverrides[name];
@@ -375,6 +409,13 @@ function refreshPieceListRow(p) {
   fillEl.style.background = ok ? '#9bcc9b' : (score > 0.5 ? '#ffd24a' : '#e87878');
 }
 
+// ╔══════════════════════════════════════════════════════════════╗
+// ║  相对位姿评分 · 以"组件集合陆 · 木栓"为锚点                     ║
+// ║  纯四元数 + 向量运算，绕开 Matrix4 分解时的 scale 渗透问题      ║
+// ║    relPos  = (pPos − aPos) 旋转回锚的局部系                    ║
+// ║    relQuat = aQuat⁻¹ ∘ pQuat                                  ║
+// ║  误差 = 目标侧 relPose 与 实际侧 relPose 的 (位置距离, 四元数夹角) ║
+// ╚══════════════════════════════════════════════════════════════╝
 // ---------- 校验：相对锚点位姿 ----------
 // 思路：选 "组件集合陆" 作为锚。
 //   - 锚件本身：error = 0（永远视为达标，不计入分母）
@@ -459,6 +500,7 @@ function gradeAll() {
   else if (score >= 0.85) grade = 'A';
   else if (score >= 0.70) grade = 'B';
   else if (score >= 0.50) grade = 'C';
+  markPrecision(LEVEL.id, grade, score); // 藏宝阁成就：记录评级（保留最高分）
   showResultCard({ score, grade, okCount, total: N });
 }
 
@@ -480,6 +522,29 @@ function showResultCard({ score, grade, okCount, total }) {
 }
 $('result-close').addEventListener('click', () => $('result-card').classList.remove('show'));
 
+// 相机平滑运镜：替代原来的瞬移（跳视角很晕），420ms 缓动
+let camTween = null;
+function tweenCamera(toPos, toTarget, duration = 420) {
+  const fromPos = camera.position.clone();
+  const fromTarget = orbit.target.clone();
+  const t0 = performance.now();
+  camTween = { active: true };
+  const tween = camTween;
+  const step = (now) => {
+    if (!tween.active) return;
+    const p = Math.min(1, (now - t0) / duration);
+    const k = 1 - Math.pow(1 - p, 3); // ease-out cubic
+    camera.position.lerpVectors(fromPos, toPos, k);
+    orbit.target.lerpVectors(fromTarget, toTarget, k);
+    orbit.update();
+    if (p < 1) requestAnimationFrame(step);
+    else tween.active = false;
+  };
+  requestAnimationFrame(step);
+}
+// 用户开始拖拽视角时中断运镜，避免"抢镜头"
+orbit.addEventListener('start', () => { if (camTween) camTween.active = false; });
+
 function focusOn(obj) {
   const target = new THREE.Vector3();
   obj.getWorldPosition(target);
@@ -487,21 +552,23 @@ function focusOn(obj) {
   const size = new THREE.Vector3();
   box.getSize(size);
   const r = Math.max(size.x, size.y, size.z, 0.5) * 2.2;
-  orbit.target.copy(target);
   const direction = new THREE.Vector3().subVectors(camera.position, target).normalize();
   if (direction.lengthSq() < 0.001) direction.set(1, 0.6, 1).normalize();
-  camera.position.copy(target).addScaledVector(direction, r);
-  orbit.update();
+  const toPos = target.clone().addScaledVector(direction, r);
+  tweenCamera(toPos, target);
 }
 function resetCamera() {
-  camera.position.set(LEVEL.cameraPos.x, LEVEL.cameraPos.y, LEVEL.cameraPos.z);
-  orbit.target.set(LEVEL.cameraTarget.x, LEVEL.cameraTarget.y, LEVEL.cameraTarget.z);
-  orbit.update();
+  tweenCamera(
+    new THREE.Vector3(LEVEL.cameraPos.x, LEVEL.cameraPos.y, LEVEL.cameraPos.z),
+    new THREE.Vector3(LEVEL.cameraTarget.x, LEVEL.cameraTarget.y, LEVEL.cameraTarget.z),
+  );
 }
 // 坐标轴总开关：同时控制
 //   1) 选中零件时出现的 TransformControls 三色 gizmo（红/绿/蓝箭头）
 //   2) 世界原点的 AxesHelper（小三色坐标轴）
 // 关闭时，画面更干净；纯键盘 / 数值面板照常调整
+// 默认关闭（用户定的交互约定）：选中零件不自动出 gizmo，
+// 需要拖拽时用右上角"显示坐标轴 (X)"按钮或 X 键打开
 let coordVisible = false;
 function applyCoordVisibility() {
   tcHelper.visible = coordVisible;

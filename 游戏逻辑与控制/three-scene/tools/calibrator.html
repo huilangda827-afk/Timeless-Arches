@@ -404,7 +404,37 @@
       el.className = 'status-msg' + (isErr ? ' status-err' : '');
     }
 
+    // ===== NaN 防护 =====
+    // 位姿一旦变成 NaN（坏几何取景 → 相机 NaN → gizmo 拖拽写入 NaN 的连锁），
+    // 整个场景会"消失"。这里做两层防护：位姿自愈 + 相机自愈。
+    function isVec3Finite(v) { return Number.isFinite(v.x) && Number.isFinite(v.y) && Number.isFinite(v.z); }
+    function healPiece(p) {
+      const o = p.obj;
+      const bad = !isVec3Finite(o.position) || !isVec3Finite(o.scale)
+        || !Number.isFinite(o.quaternion.x) || !Number.isFinite(o.quaternion.w);
+      if (!bad) return false;
+      console.warn(`[Calibrator] 检测到 ${p.name} 位姿为 NaN，已复位到安全位置`);
+      o.position.set(0, 1.5, 0);
+      o.quaternion.identity();
+      o.scale.set(1, 1, 1);
+      // 同步清洗两套缓存，防止 NaN 从缓存里再回灌
+      ['targetTf', 'dockTf'].forEach((key) => {
+        const tf = p[key];
+        if (tf && (!isVec3Finite(tf.position) || !isVec3Finite(tf.scale))) {
+          p[key] = captureTransform(o);
+        }
+      });
+      return true;
+    }
+    function healAllPieces() {
+      let healed = 0;
+      pieces.forEach((p) => { if (healPiece(p)) healed++; });
+      if (healed > 0) status('status-pieces', `⚕ 已自动修复 ${healed} 个 NaN 位姿零件（复位到 0,1.5,0）`, false);
+      return healed;
+    }
+
     function renderPieceList() {
+      healAllPieces();
       const ui = document.getElementById('piece-list-ui');
       ui.innerHTML = '';
       pieces.forEach((p) => {
@@ -453,15 +483,18 @@
     function focusCameraOn(obj) {
       const target = new THREE.Vector3();
       obj.getWorldPosition(target);
+      if (!isVec3Finite(target)) return; // NaN 防护：绝不带着相机跳进 NaN
       // 用 box 计算合适距离，避免零件比例特别大或特别小时相机靠太近/太远
       const box = new THREE.Box3().setFromObject(obj);
       const size = new THREE.Vector3();
       box.getSize(size);
-      const radius = Math.max(size.x, size.y, size.z, 1) * 0.9;
+      // 坏几何（含 NaN 顶点）会产生非有限包围盒 → 用保守半径顶替，不动相机距离逻辑
+      let radius = Math.max(size.x, size.y, size.z, 1) * 0.9;
+      if (!Number.isFinite(radius)) radius = 3;
 
       orbit.target.copy(target);
       const dir = new THREE.Vector3().subVectors(camera.position, target).normalize();
-      if (dir.lengthSq() < 0.001) dir.set(1, 0.5, 1).normalize();
+      if (dir.lengthSq() < 0.001 || !isVec3Finite(dir)) dir.set(1, 0.5, 1).normalize();
       camera.position.copy(target).addScaledVector(dir, radius * 3);
       orbit.update();
     }
@@ -856,9 +889,29 @@
     }
     document.getElementById('btn-lock-group').addEventListener('click', toggleGroupLock);
 
+    // 取景所有可见零件：全部显示后相机自动拉到能看见它们的位置
+    function frameAllPieces() {
+      const box = new THREE.Box3();
+      let any = false;
+      pieces.forEach(p => {
+        if (p.obj.visible) { box.expandByObject(p.obj); any = true; }
+      });
+      if (!any || box.isEmpty()) return;
+      const center = box.getCenter(new THREE.Vector3());
+      const size = box.getSize(new THREE.Vector3());
+      let radius = Math.max(size.x, size.y, size.z, 0.5);
+      if (!isVec3Finite(center) || !Number.isFinite(radius)) return; // NaN 防护
+      orbit.target.copy(center);
+      const dir = new THREE.Vector3().subVectors(camera.position, center).normalize();
+      if (dir.lengthSq() < 0.001 || !isVec3Finite(dir)) dir.set(1, 0.6, 1).normalize();
+      camera.position.copy(center).addScaledVector(dir, radius * 2.2);
+      orbit.update();
+    }
+
     document.getElementById('btn-show-all').addEventListener('click', () => {
       pieces.forEach(p => { p.obj.visible = true; });
       renderPieceList();
+      frameAllPieces(); // 修复：显示后相机自动取景，避免"点了但什么都看不见"
     });
     document.getElementById('btn-hide-all').addEventListener('click', () => {
       pieces.forEach(p => { p.obj.visible = false; });
@@ -1098,9 +1151,190 @@
       }
     });
 
+    // ============================================================
+    // 自动存档：每 2 秒把整个会话（路径、模式、三个整体位姿、全部零件
+    // 双套位姿、可见性）写入 localStorage；页面刷新/误关后一键恢复。
+    // ============================================================
+    const AUTOSAVE_KEY = 'calibrator_autosave_v1';
+    // 序列化时清洗 NaN：位置退回原点、旋转退回单位四元数、缩放退回 1
+    const _fin = (arr, fb) => arr.map((v, i) => (Number.isFinite(v) ? v : fb[i]));
+    const tf2raw = (tf) => ({
+      p: _fin(tf.position.toArray(), [0, 0, 0]),
+      q: _fin(tf.quaternion.toArray(), [0, 0, 0, 1]),
+      s: _fin(tf.scale.toArray(), [1, 1, 1]),
+    });
+    const raw2tf = (r) => ({
+      position: new THREE.Vector3().fromArray(r.p),
+      quaternion: new THREE.Quaternion().fromArray(r.q),
+      scale: new THREE.Vector3().fromArray(r.s),
+    });
+
+    function collectSession() {
+      // 锁定整体时零件坐标是 holder 局部系，先不同步缓存（缓存里仍是解锁时的世界坐标）
+      if (!groupLocked && isHolderIdentity()) {
+        const curKey = editMode === 'target' ? 'targetTf' : 'dockTf';
+        pieces.forEach(p => { p[curKey] = captureTransform(p.obj); });
+      }
+      return {
+        t: Date.now(),
+        inputs: {
+          bg: document.getElementById('bg-path').value,
+          ghost: document.getElementById('ghost-path').value,
+          showcase: document.getElementById('showcase-path').value,
+          list: document.getElementById('piece-list').value,
+          prefix: document.getElementById('piece-prefix').value,
+        },
+        editMode,
+        bgTf: bgObj ? tf2raw(captureTransform(bgObj)) : null,
+        ghostTf: ghostObj ? tf2raw(captureTransform(ghostObj)) : null,
+        showcaseTf: showcaseObj ? tf2raw(captureTransform(showcaseObj)) : null,
+        pieces: pieces.map(p => ({
+          name: p.name,
+          target: tf2raw(p.targetTf),
+          dock: tf2raw(p.dockTf),
+          visible: p.obj.visible,
+        })),
+      };
+    }
+
+    function saveSession() {
+      try {
+        // 空会话不覆盖旧存档
+        if (pieces.length === 0 && !bgObj && !ghostObj && !showcaseObj) return;
+        localStorage.setItem(AUTOSAVE_KEY, JSON.stringify(collectSession()));
+      } catch (_) {}
+    }
+    setInterval(saveSession, 2000);
+    window.addEventListener('beforeunload', saveSession);
+
+    // ---------- 恢复 ----------
+    function loadGlbAsync(path) {
+      return new Promise((res, rej) => gltfLoader.load(resolveUrl(path), res, undefined, rej));
+    }
+
+    async function restoreSession(data) {
+      const banner = document.getElementById('autosave-banner');
+      const setMsg = (m) => { if (banner) banner.querySelector('span').textContent = m; };
+
+      // 1. 回填输入框
+      document.getElementById('bg-path').value = data.inputs.bg || '';
+      document.getElementById('ghost-path').value = data.inputs.ghost || '';
+      document.getElementById('showcase-path').value = data.inputs.showcase || '';
+      document.getElementById('piece-list').value = data.inputs.list || '';
+      document.getElementById('piece-prefix').value = data.inputs.prefix || '';
+
+      // 2. 三个整体（存了位姿的才恢复）
+      if (data.bgTf && data.inputs.bg) {
+        setMsg('恢复中：背景场景…');
+        try {
+          if (bgObj) { scene.remove(bgObj); }
+          bgObj = (await loadGlbAsync(data.inputs.bg)).scene;
+          scene.add(bgObj);
+          applyTransform(bgObj, raw2tf(data.bgTf));
+          status('status-bg', '✅ 背景已恢复');
+        } catch (e) { status('status-bg', '恢复失败：' + (e.message || e), true); }
+      }
+      if (data.ghostTf && data.inputs.ghost) {
+        setMsg('恢复中：幽灵参照…');
+        try {
+          if (ghostObj) { scene.remove(ghostObj); }
+          const m = (await loadGlbAsync(data.inputs.ghost)).scene;
+          m.traverse((node) => {
+            if (node.isMesh && node.material) {
+              node.material = node.material.clone();
+              node.material.transparent = true;
+              node.material.opacity = 0.45;
+              node.material.depthWrite = false;
+            }
+          });
+          ghostObj = m;
+          scene.add(ghostObj);
+          applyTransform(ghostObj, raw2tf(data.ghostTf));
+          status('status-ghost', '✅ 幽灵已恢复');
+        } catch (e) { status('status-ghost', '恢复失败：' + (e.message || e), true); }
+      }
+      if (data.showcaseTf && data.inputs.showcase) {
+        setMsg('恢复中：实物成品…');
+        try {
+          if (showcaseObj) { scene.remove(showcaseObj); }
+          showcaseObj = (await loadGlbAsync(data.inputs.showcase)).scene;
+          scene.add(showcaseObj);
+          applyTransform(showcaseObj, raw2tf(data.showcaseTf));
+          status('status-showcase', '✅ 实物已恢复');
+        } catch (e) { status('status-showcase', '恢复失败：' + (e.message || e), true); }
+      }
+
+      // 3. 零件（双套位姿 + 可见性）
+      if (Array.isArray(data.pieces) && data.pieces.length && data.inputs.prefix) {
+        pieces.forEach(p => pieceHolder.remove(p.obj));
+        pieces.length = 0;
+        selectedPiece = null;
+        tc.detach();
+        let n = 0;
+        for (const saved of data.pieces) {
+          setMsg(`恢复零件 ${n + 1}/${data.pieces.length}：${saved.name}`);
+          try {
+            const obj = (await loadGlbAsync(data.inputs.prefix + saved.name + '.glb')).scene;
+            pieceHolder.add(obj);
+            const rec = {
+              name: saved.name,
+              obj,
+              targetTf: raw2tf(saved.target),
+              dockTf: raw2tf(saved.dock),
+            };
+            applyTransform(obj, data.editMode === 'dock' ? rec.dockTf : rec.targetTf);
+            obj.visible = saved.visible !== false;
+            pieces.push(rec);
+            n++;
+          } catch (e) { console.warn('恢复零件失败:', saved.name, e); }
+        }
+        editMode = data.editMode === 'dock' ? 'dock' : 'target';
+        updateModeUI();
+        renderPieceList();
+        status('status-pieces', `✅ 已从存档恢复 ${n} 个零件`);
+      }
+
+      syncTweakPanel();
+      banner?.remove();
+      saveSession();
+    }
+
+    // ---------- 启动时检测存档 ----------
+    (function checkAutosave() {
+      let data = null;
+      try { data = JSON.parse(localStorage.getItem(AUTOSAVE_KEY) || 'null'); } catch (_) {}
+      if (!data || (!data.pieces?.length && !data.bgTf && !data.ghostTf)) return;
+
+      const banner = document.createElement('div');
+      banner.id = 'autosave-banner';
+      banner.style.cssText = `
+        position:fixed;top:12px;left:50%;transform:translateX(-50%);z-index:9000;
+        display:flex;align-items:center;gap:12px;padding:10px 18px;
+        background:rgba(30,22,13,0.97);border:1px solid rgba(255,210,74,0.6);border-radius:8px;
+        color:#f4e8d8;font-size:13px;box-shadow:0 10px 40px rgba(0,0,0,0.6);
+      `;
+      const time = new Date(data.t).toLocaleTimeString();
+      banner.innerHTML = `
+        <span>📂 检测到自动存档（${time} · ${data.pieces?.length || 0} 个零件）</span>
+        <button id="autosave-restore" style="padding:6px 16px;font-size:12px;">一键恢复</button>
+        <button id="autosave-discard" class="ghost" style="padding:6px 12px;font-size:12px;">清除</button>
+      `;
+      document.body.appendChild(banner);
+      document.getElementById('autosave-restore').addEventListener('click', () => restoreSession(data));
+      document.getElementById('autosave-discard').addEventListener('click', () => {
+        try { localStorage.removeItem(AUTOSAVE_KEY); } catch (_) {}
+        banner.remove();
+      });
+    })();
+
     // ===== 渲染循环 =====
     function animate() {
       requestAnimationFrame(animate);
+      // 相机自愈：一旦相机位姿被 NaN 污染（画面全黑/全消失），立即复位到游戏默认机位
+      if (!Number.isFinite(camera.position.x) || !Number.isFinite(orbit.target.x)) {
+        console.warn('[Calibrator] 相机位姿 NaN，已自动复位');
+        resetCameraToGameDefault();
+      }
       orbit.update();
       renderer.render(scene, camera);
     }

@@ -1,0 +1,61 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>藏宝阁 · 拾光筑梦</title>
+  <link rel="icon" href="/images/brand/logo-dougong.svg" type="image/svg+xml" />
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Ma+Shan+Zheng&family=Noto+Serif+SC:wght@400;600;900&family=JetBrains+Mono:wght@400;600&display=swap" rel="stylesheet" />
+  <link rel="stylesheet" href="/src/collection2/collection2.css" />
+</head>
+<body>
+
+  <!-- 顶部导航（与新门户同款） -->
+  <header class="nav">
+    <a class="nav-logo" href="/home2.html">
+      <img class="nav-mark" src="/images/brand/logo-dougong.svg" alt="拾光筑梦" />
+      <span class="nav-word">
+        <b>拾光筑梦</b>
+        <em>TIMELESS ARCHES</em>
+      </span>
+    </a>
+    <nav class="nav-links">
+      <a href="/home2.html">首页</a>
+      <a href="/catalog2.html">万象图鉴</a>
+      <a href="/map2.html">古建舆图</a>
+      <a href="/view2.html">鉴赏</a>
+      <a href="/forge.html">筑梦</a>
+      <a href="/arcade.html">游艺坊</a>
+      <a class="on" href="/collection2.html">藏宝阁</a>
+    </nav>
+  </header>
+
+  <!-- 页头：游历统计 -->
+  <section class="head">
+    <h1>藏宝阁</h1>
+    <p class="head-sub">每一步游历，皆成收藏</p>
+    <div class="stats" id="stats"></div>
+  </section>
+
+  <!-- 技艺成就徽章 -->
+  <section class="zone">
+    <h2><i></i>技艺成就</h2>
+    <div class="badge-grid" id="badge-grid"></div>
+  </section>
+
+  <!-- 建筑图鉴卡牌 -->
+  <section class="zone">
+    <h2><i></i>古建图鉴 <span class="zone-tip">在鉴赏中细观一座建筑，即可点亮它的卡牌</span></h2>
+    <div class="card-grid" id="card-grid"></div>
+  </section>
+
+  <footer class="footer">
+    拾光筑梦 · 藏宝阁 — Demo 预览版
+    <em>记录保存在本地浏览器 · 清除浏览器数据会重置收藏</em>
+  </footer>
+
+  <script type="module" src="/src/collection2/collection2-main.js"></script>
+</body>
+</html>

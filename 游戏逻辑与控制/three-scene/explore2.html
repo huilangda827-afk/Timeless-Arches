@@ -1,0 +1,72 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>探微 · 万春亭 · 拾光筑梦</title>
+  <link rel="icon" href="/images/brand/logo-dougong.svg" type="image/svg+xml" />
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Ma+Shan+Zheng&family=Noto+Serif+SC:wght@400;600;900&display=swap" rel="stylesheet" />
+  <link rel="stylesheet" href="/src/explore2/explore2.css" />
+</head>
+<body>
+
+  <!-- 顶部导航（与新门户同款） -->
+  <header class="nav">
+    <a class="nav-logo" href="/home2.html">
+      <img class="nav-mark" src="/images/brand/logo-dougong.svg" alt="拾光筑梦" />
+      <span class="nav-word">
+        <b>拾光筑梦</b>
+        <em>TIMELESS ARCHES</em>
+      </span>
+    </a>
+    <nav class="nav-links">
+      <a href="/home2.html">首页</a>
+      <a href="/catalog2.html">万象图鉴</a>
+      <a href="/map2.html">古建舆图</a>
+      <a href="/view2.html">鉴赏</a>
+      <a href="/forge.html">筑梦</a>
+      <a href="/arcade.html">游艺坊</a>
+      <a href="/collection2.html">藏宝阁</a>
+    </nav>
+  </header>
+
+  <!-- 全屏 3D 舞台 -->
+  <main class="stage">
+    <div class="stage-3d" id="stage-3d">
+      <div class="stage-loading" id="stage-loading">正在加载万春亭…</div>
+    </div>
+
+    <!-- 页题 -->
+    <div class="stage-title">
+      <span class="st-kicker">探 微 · 拆 解 入 微</span>
+      <h1>万春亭铺作</h1>
+      <p>明代 · 紫禁城御花园 · 六组集合 · 二十八件构件</p>
+    </div>
+
+    <!-- 工具栏 -->
+    <div class="toolbar">
+      <button data-mode="whole" class="tb-btn active">整 体</button>
+      <button data-mode="explode" class="tb-btn">一键解体</button>
+      <button data-action="reset" class="tb-btn ghost">重置视角</button>
+      <label class="tb-strength">
+        强度
+        <input type="range" min="0.5" max="6.0" step="0.1" value="2.6" id="strength" />
+      </label>
+    </div>
+
+    <!-- 集合介绍卡 -->
+    <aside class="info-card" id="info-card">
+      <h4 id="info-name">—</h4>
+      <p class="info-parts" id="info-parts">—</p>
+      <p class="info-desc" id="info-desc">—</p>
+    </aside>
+
+    <!-- 底部状态 -->
+    <div class="status" id="status">鼠标悬停查看集合 · 单击锁定介绍 · 拖拽旋转 · 滚轮缩放</div>
+  </main>
+
+  <script type="module" src="/src/explore2/explore2-main.js"></script>
+</body>
+</html>

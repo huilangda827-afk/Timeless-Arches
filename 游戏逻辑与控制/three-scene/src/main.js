@@ -12,6 +12,8 @@ import * as THREE from "three";
 import { GLTFLoader } from "three/examples/jsm/loaders/GLTFLoader.js";
 import { OrbitControls } from "three/examples/jsm/controls/OrbitControls.js";
 import { HandInput } from "./core/HandInput.js";
+import { markForged, markTimed } from "./shared/records.js";
+import { encodeAssetUrl } from "./shared/asset-url.js";
 
 // ===================== 全局变量 =====================
 let scene, camera, renderer, controls;
@@ -283,6 +285,186 @@ const LEVELS = [
     cameraPos: { x: 6.0, y: 4.0, z: 6.0 },
     cameraTarget: { x: 0, y: 1.5, z: 0 },
   },
+  {
+    id: 3,
+    name: '太原晋祠圣母殿铺作',
+    ghostPath: '/models/level3/晋祠圣母殿.glb',      // 整体合模（幽灵参照）
+    showcasePath: '/models/level3/晋祠圣母殿.glb',   // 实体成品（旁置展示）
+    piecePathPrefix: '/models/level3/',
+    // 10 个拼装单位（建模原文件名即层序 1→11；8 号昂形耍头按校准决定弃用）
+    pieceNames: [
+      '1底部',
+      '2泥道栱、散斗与一跳华栱、散斗与交互斗与阑额一道柱头枋、散斗',
+      '3华头子出头（出一折）、交互斗、梭形栱',
+      '4瓜子栱与散斗、丁头栱（充当鞾楔作用）与散斗',
+      '5二道柱头枋（隐刻短栱）、散斗',
+      '6昂尾下皮置鞾楔与一道下昂（批竹昂起棱出尖）、昂尾上置散斗、替木、平槫',
+      '7罗汉枋、令栱、散斗',
+      '9三道柱头枋（隐刻长栱）、散斗、替木（通檐',
+      '10压槽枋、撩檐槫',
+      '11顶部',
+    ],
+    displayNames: {
+      '1底部': '栌斗基座',
+      '2泥道栱、散斗与一跳华栱、散斗与交互斗与阑额一道柱头枋、散斗': '泥道栱层',
+      '3华头子出头（出一折）、交互斗、梭形栱': '华头子层',
+      '4瓜子栱与散斗、丁头栱（充当鞾楔作用）与散斗': '瓜子栱层',
+      '5二道柱头枋（隐刻短栱）、散斗': '二道柱头枋',
+      '6昂尾下皮置鞾楔与一道下昂（批竹昂起棱出尖）、昂尾上置散斗、替木、平槫': '下昂组',
+      '7罗汉枋、令栱、散斗': '罗汉枋层',
+      '9三道柱头枋（隐刻长栱）、散斗、替木（通檐': '三道柱头枋',
+      '10压槽枋、撩檐槫': '压槽枋组',
+      '11顶部': '顶部合构',
+    },
+    pieceLore: {
+      '1底部': { brief: '柱头之上的四耳栌斗与基座枋木，整攒铺作由此起步，承接全部上传荷载。' },
+      '2泥道栱、散斗与一跳华栱、散斗与交互斗与阑额一道柱头枋、散斗': { brief: '泥道栱横置栌斗口内，一跳华栱向外挑出，交互斗与阑额、柱头枋锁定第一层出跳。' },
+      '3华头子出头（出一折）、交互斗、梭形栱': { brief: '华头子出头承托下昂昂底，梭形栱线条流畅，是宋构"出一折"的典型做法。' },
+      '4瓜子栱与散斗、丁头栱（充当鞾楔作用）与散斗': { brief: '瓜子栱承托上层枋木，丁头栱在此充当鞾楔，垫稳斜置的昂身。' },
+      '5二道柱头枋（隐刻短栱）、散斗': { brief: '隐刻短栱的第二道柱头枋，把纵向拱列拉结为整体。' },
+      '6昂尾下皮置鞾楔与一道下昂（批竹昂起棱出尖）、昂尾上置散斗、替木、平槫': { brief: '批竹昂起棱出尖斜贯全攒，昂尾压于槫下——以杠杆之力平衡深远出檐，宋式真昂的精髓。' },
+      '7罗汉枋、令栱、散斗': { brief: '罗汉枋与令栱、散斗配合，承托外跳最前端的荷载。' },
+      '9三道柱头枋（隐刻长栱）、散斗、替木（通檐': { brief: '隐刻长栱的第三道柱头枋，配替木通檐拉结，结构至此渐收。' },
+      '10压槽枋、撩檐槫': { brief: '压槽枋压住昂尾，撩檐槫承接屋面重量，力流在此转入柱身。' },
+      '11顶部': { brief: '铺作最顶端的槫木合构，屋面荷载自此层层下传，一攒五铺作至此功成。' },
+    },
+    finishLore: {
+      title: '太原晋祠圣母殿铺作',
+      subtitle: '北宋 · 五铺作单杪单昂 · 《营造法式》典范',
+      body: '晋祠圣母殿是宋代建筑的传世孤例。其铺作为"五铺作单杪单昂"——单杪水平出跳、单昂斜身下压，一平一斜互为制衡：华栱稳稳承托，真昂以杠杆原理将深远屋檐的千钧之力转化为对柱心的压应力。批竹昂起棱出尖、柱头枋隐刻栱眼等做法，皆是《营造法式》颁行前后北宋匠作技艺的活标本。你刚刚亲手复原的，正是这套传承千年的力学智慧。',
+      source: '《营造法式》北宋 · 李诫',
+    },
+    manualAssemblyOrder: null, // 按 Y 坐标自动分层推导（1底部 → 11顶部）
+    environmentPath: '/models/level2/level2-scene.glb', // 复用第二关雪山场景
+    knowledgeImage: '/models/level3/knowledgecard.png', // 圣母殿转角铺作实拍（组员供图）
+    // === 由 tools/calibrator.html 校准导出（2026-08-13，组员人工标定）===
+    targetOverrides: {
+      '1底部': {
+        position: { x: 2.9, y: 0.1, z: 1.1 },
+        quaternion: { x: 0, y: -0.2588, z: 0, w: 0.9659 },
+        scale: { x: 0.65, y: 0.65, z: 0.65 },
+      },
+      '2泥道栱、散斗与一跳华栱、散斗与交互斗与阑额一道柱头枋、散斗': {
+        position: { x: 2.883, y: 0.3, z: 1.0813 },
+        quaternion: { x: 0, y: -0.2588, z: 0, w: 0.9659 },
+        scale: { x: 0.55, y: 0.55, z: 0.55 },
+      },
+      '3华头子出头（出一折）、交互斗、梭形栱': {
+        position: { x: 2.883, y: 0.4, z: 1.081 },
+        quaternion: { x: 0, y: 0.5, z: 0, w: 0.866 },
+        scale: { x: 0.4, y: 0.4, z: 0.4 },
+      },
+      '4瓜子栱与散斗、丁头栱（充当鞾楔作用）与散斗': {
+        position: { x: 2.9, y: 0.47, z: 1.1 },
+        quaternion: { x: 0, y: 0.9659, z: 0, w: 0.2588 },
+        scale: { x: 0.5, y: 0.5, z: 0.5 },
+      },
+      '5二道柱头枋（隐刻短栱）、散斗': {
+        position: { x: 3.14, y: 0.47, z: 0.781 },
+        quaternion: { x: 0, y: -0.2588, z: 0, w: 0.9659 },
+        scale: { x: 0.6, y: 0.6, z: 0.6 },
+      },
+      '6昂尾下皮置鞾楔与一道下昂（批竹昂起棱出尖）、昂尾上置散斗、替木、平槫': {
+        position: { x: 2.883, y: 0.49, z: 1.081 },
+        quaternion: { x: 0, y: 0.9659, z: 0, w: 0.2588 },
+        scale: { x: 0.55, y: 0.55, z: 0.55 },
+      },
+      '7罗汉枋、令栱、散斗': {
+        position: { x: 2.881, y: 0.4, z: 0.937 },
+        quaternion: { x: 0, y: -0.2588, z: 0, w: 0.9659 },
+        scale: { x: 0.6, y: 0.6, z: 0.6 },
+      },
+      '9三道柱头枋（隐刻长栱）、散斗、替木（通檐': {
+        position: { x: 2.9, y: 0.7, z: 1 },
+        quaternion: { x: 0, y: -0.2588, z: 0, w: 0.9659 },
+        scale: { x: 0.55, y: 0.55, z: 0.55 },
+      },
+      '10压槽枋、撩檐槫': {
+        position: { x: 2.97, y: 0.63, z: 0.781 },
+        quaternion: { x: 0, y: 0.9659, z: 0, w: 0.2588 },
+        scale: { x: 0.4, y: 0.4, z: 0.4 },
+      },
+      '11顶部': {
+        position: { x: 2.683, y: 0.87, z: 1.019 },
+        quaternion: { x: 0, y: 0.9659, z: 0, w: 0.2588 },
+        scale: { x: 0.85, y: 0.85, z: 0.85 },
+      },
+    },
+    dockOverrides: {
+      '1底部': {
+        position: { x: 4, y: 1.3, z: 0.6 },
+        quaternion: { x: 0, y: -0.2588, z: 0, w: 0.9659 },
+        scale: { x: 0.45, y: 0.45, z: 0.45 },
+      },
+      '2泥道栱、散斗与一跳华栱、散斗与交互斗与阑额一道柱头枋、散斗': {
+        position: { x: 3.6, y: 2.3, z: -1.6 },
+        quaternion: { x: 0, y: -0.2588, z: 0, w: 0.9659 },
+        scale: { x: 0.45, y: 0.45, z: 0.45 },
+      },
+      '3华头子出头（出一折）、交互斗、梭形栱': {
+        position: { x: 3.9, y: 2.5, z: 1.5 },
+        quaternion: { x: 0, y: 0.1305, z: 0, w: 0.9914 },
+        scale: { x: 0.45, y: 0.45, z: 0.45 },
+      },
+      '4瓜子栱与散斗、丁头栱（充当鞾楔作用）与散斗': {
+        position: { x: 3.3, y: 2.8, z: 0.5 },
+        quaternion: { x: 0, y: 0.9659, z: 0, w: 0.2588 },
+        scale: { x: 0.45, y: 0.45, z: 0.45 },
+      },
+      '5二道柱头枋（隐刻短栱）、散斗': {
+        position: { x: 1.8, y: 2.8, z: 3 },
+        quaternion: { x: 0, y: 0.3827, z: 0, w: 0.9239 },
+        scale: { x: 0.45, y: 0.45, z: 0.45 },
+      },
+      '6昂尾下皮置鞾楔与一道下昂（批竹昂起棱出尖）、昂尾上置散斗、替木、平槫': {
+        position: { x: 1.7, y: 2, z: 1.2 },
+        quaternion: { x: 0, y: 0.9659, z: 0, w: 0.2588 },
+        scale: { x: 0.45, y: 0.45, z: 0.45 },
+      },
+      '7罗汉枋、令栱、散斗': {
+        position: { x: 3.5, y: 2, z: 1.9 },
+        quaternion: { x: 0, y: 0.9659, z: 0, w: 0.2588 },
+        scale: { x: 0.45, y: 0.45, z: 0.45 },
+      },
+      '9三道柱头枋（隐刻长栱）、散斗、替木（通檐': {
+        position: { x: 1.2, y: 1.5, z: 2.2 },
+        quaternion: { x: 0, y: 0.6088, z: 0, w: 0.7934 },
+        scale: { x: 0.45, y: 0.45, z: 0.45 },
+      },
+      '10压槽枋、撩檐槫': {
+        position: { x: 1.3, y: 3.6, z: 2.3 }, // 实测抓不到，按组员校准挪高至空中显眼处
+        quaternion: { x: 0, y: 0.9659, z: 0, w: 0.2588 },
+        scale: { x: 0.45, y: 0.45, z: 0.45 },
+      },
+      // 11 号导出时带了非水平旋转（校准误触），已归正为与目标同朝向
+      '11顶部': {
+        position: { x: 3.4, y: 3.5, z: 2.6 },
+        quaternion: { x: 0, y: 0.9659, z: 0, w: 0.2588 },
+        scale: { x: 0.45, y: 0.45, z: 0.45 },
+      },
+    },
+    environmentTransform: {
+      position: { x: 0, y: 0, z: 0 },
+      quaternion: { x: 0, y: 0.2164, z: 0, w: 0.9763 },
+      scale: { x: 5, y: 5, z: 5 },
+    },
+    showcaseTransform: {
+      position: { x: -0.5, y: 0.4, z: 3.5 },
+      quaternion: { x: -0.0338, y: -0.2566, z: 0.1261, w: 0.9576 },
+      scale: { x: 0.9, y: 0.9, z: 0.9 },
+    },
+    ghostTransform: {
+      position: { x: 3, y: 0.5, z: 1.1 },
+      quaternion: { x: 0, y: 0.9659, z: 0, w: 0.2588 },
+      scale: { x: 0.9, y: 0.9, z: 0.9 },
+    },
+    // 与第二关同策略：幽灵默认隐藏，靠左侧实物 showcase + H 键提示
+    ghostAlwaysVisible: false,
+    ghostOpacity: 0.35,
+    // 第三关专属机位：比默认 (6,4,6) 更近、更贴岛屿全貌（按校准时组员认可的构图）
+    cameraPos: { x: 4.6, y: 3.4, z: 5.0 },
+    cameraTarget: { x: 0.4, y: 1.4, z: 0.4 },
+  },
 ];
 
 // 从 URL 参数读取初始关卡（门户跳转过来：forge.html?level=2 进入万春亭）
@@ -300,6 +482,18 @@ function _parseInitialLevelIndex() {
 }
 let currentLevelIndex = _parseInitialLevelIndex();
 let currentLevel = LEVELS[currentLevelIndex];
+
+// 千钧一刻（游艺坊限时模式）：?timed=1 进入
+//   - HUD 顶栏显示实时计时
+//   - 结算卡按用时评级（S/A/B/C，阈值秒数按关卡）并记录最佳成绩
+const IS_TIMED = (() => {
+  try { return new URLSearchParams(location.search).get('timed') === '1'; } catch (_) { return false; }
+})();
+const TIMED_RANK_THRESHOLDS = { 1: [60, 95, 150], 2: [130, 210, 330], 3: [220, 340, 520] }; // [S, A, B] 秒
+function timedRank(levelId, seconds) {
+  const t = TIMED_RANK_THRESHOLDS[levelId] || [90, 150, 240];
+  return seconds <= t[0] ? 'S' : seconds <= t[1] ? 'A' : seconds <= t[2] ? 'B' : 'C';
+}
 
 // 兼容旧代码：这些"全局变量"指向当前关卡字段，切关时由 applyLevelConfig() 重赋值
 let PIECE_NAMES = currentLevel.pieceNames;
@@ -547,40 +741,51 @@ async function init() {
   // 绑定UI事件
   setupUIEvents();
 
-  // 按顺序加载资源
+  // 按顺序加载资源（持有本轮加载代号：玩家若中途切关，这条链立即中止，
+  // 迟到的模型由各 loader 内部的代号校验丢弃，避免与新关卡的模型叠加）
   console.log('[Main] 开始加载游戏资源...');
-  await loadEnvironment();
-  await loadGhostReference();
-  // 幽灵目标点解析完成后，自动按 Y 坐标推导拼接顺序（从下往上）
-  buildAssemblyOrder();
-  await loadInteractivePieces();
+  const initGen = ++loadGeneration;
+  await loadEnvironment(undefined, initGen);
+  if (initGen === loadGeneration) {
+    await loadGhostReference(initGen);
+  }
+  if (initGen === loadGeneration) {
+    // 幽灵目标点解析完成后，自动按 Y 坐标推导拼接顺序（从下往上）
+    buildAssemblyOrder();
+    await loadInteractivePieces(initGen);
+  }
 
-  console.log('[Main] ✅ 游戏初始化完成');
-  
-  // ✅ 调试：最终对账单 - 验证名称匹配
-  console.log("=== [DEBUG] 最终对账单 - 名称匹配验证 ===");
-  console.log("目标点数量:", Object.keys(TARGET_CONFIG).length);
-  console.log("玩家组件数量:", interactivePieces.length);
-  console.log("\n目标点列表:", Object.keys(TARGET_CONFIG));
-  console.log("玩家组件列表:", interactivePieces.map(p => p.userData.partID));
-  
-  // 检查匹配情况
-  const missingTargets = interactivePieces.filter(p => !TARGET_CONFIG[p.userData.partID]);
-  const missingPieces = Object.keys(TARGET_CONFIG).filter(key => !interactivePieces.find(p => p.userData.partID === key));
-  
-  if (missingTargets.length > 0) {
-    console.warn("⚠️ 以下组件没有对应的目标位置:", missingTargets.map(p => p.userData.partID));
-  }
-  if (missingPieces.length > 0) {
-    console.warn("⚠️ 以下目标位置没有对应的组件:", missingPieces);
-  }
-  if (missingTargets.length === 0 && missingPieces.length === 0) {
-    console.log("✅ 所有组件和目标位置都匹配！");
-  }
-  console.log("==================================");
+  if (initGen !== loadGeneration) {
+    // 玩家已在加载中切关，场景由 loadLevel 接管；这里只补完与关卡无关的初始化
+    console.log('[Main] ⏭️ 初始关卡加载已被切关取代（后续由 loadLevel 接管）');
+  } else {
+    console.log('[Main] ✅ 游戏初始化完成');
 
-  // 初始化 HUD 状态（显示第一个应拼构件）
-  updateHUDStatus();
+    // ✅ 调试：最终对账单 - 验证名称匹配
+    console.log("=== [DEBUG] 最终对账单 - 名称匹配验证 ===");
+    console.log("目标点数量:", Object.keys(TARGET_CONFIG).length);
+    console.log("玩家组件数量:", interactivePieces.length);
+    console.log("\n目标点列表:", Object.keys(TARGET_CONFIG));
+    console.log("玩家组件列表:", interactivePieces.map(p => p.userData.partID));
+
+    // 检查匹配情况
+    const missingTargets = interactivePieces.filter(p => !TARGET_CONFIG[p.userData.partID]);
+    const missingPieces = Object.keys(TARGET_CONFIG).filter(key => !interactivePieces.find(p => p.userData.partID === key));
+
+    if (missingTargets.length > 0) {
+      console.warn("⚠️ 以下组件没有对应的目标位置:", missingTargets.map(p => p.userData.partID));
+    }
+    if (missingPieces.length > 0) {
+      console.warn("⚠️ 以下目标位置没有对应的组件:", missingPieces);
+    }
+    if (missingTargets.length === 0 && missingPieces.length === 0) {
+      console.log("✅ 所有组件和目标位置都匹配！");
+    }
+    console.log("==================================");
+
+    // 初始化 HUD 状态（显示第一个应拼构件）
+    updateHUDStatus();
+  }
 
   // 初始化环境尘埃粒子（常驻氛围）
   initAmbientParticles();
@@ -604,8 +809,73 @@ async function init() {
   } catch (_) {}
 }
 
+/**
+ * 带重试的 GLB 加载。
+ * 线上首访时 CDN 冷缓存 + 单关约 200MB 并发下载，单个请求被中断的概率很高；
+ * 重试一次基本就能命中已回源的热缓存。
+ * @param {string} url
+ * @param {number} retries 失败后的额外尝试次数
+ * @returns {Promise<object>} gltf
+ */
+function loadGLBWithRetry(url, retries = 2) {
+  const safeUrl = encodeAssetUrl(url);
+  return new Promise((resolve, reject) => {
+    const attempt = (n) => {
+      gltfLoader.load(safeUrl, resolve, undefined, (err) => {
+        if (n >= retries) return reject(err);
+        const delay = 1000 * (n + 1);
+        console.warn(`[Loader] ⚠️ ${url} 第 ${n + 1} 次加载失败，${delay}ms 后重试：`, err?.message || err);
+        setTimeout(() => attempt(n + 1), delay);
+      });
+    };
+    attempt(0);
+  });
+}
+
+// ===================== 加载代号（防竞态）=====================
+// 慢网络下，init 的首关加载还没完成时玩家就可能切关（开始筑梦/N 键），
+// 若不作废旧请求，迟到的模型会在 loadLevel 清场之后才进场景 → 构件翻倍、双背景穿模。
+// 规则：每开启一轮加载就 ++loadGeneration；异步回调落地前校验代号，过期则丢弃并释放资源。
+let loadGeneration = 0;
+
+/** 释放一个不再需要的模型树（几何体 + 材质） */
+function disposeObject3D(root) {
+  if (!root) return;
+  root.traverse((n) => {
+    if (n.isMesh) {
+      n.geometry?.dispose?.();
+      if (Array.isArray(n.material)) n.material.forEach((m) => m?.dispose?.());
+      else n.material?.dispose?.();
+    }
+  });
+}
+
+/**
+ * 把当前关卡的环境姿态应用到背景模型上。
+ * 先归零再套值：环境模型可能是上一关复用下来的（如第二/三关共用
+ * level2-scene.glb 但姿态不同），不归零会叠加出错误的朝向和大小。
+ */
+function applyEnvironmentTransform(model) {
+  model.position.set(0, 0, 0);
+  model.quaternion.set(0, 0, 0, 1);
+  model.scale.setScalar(1);
+  const envT = currentLevel && currentLevel.environmentTransform;
+  if (envT) {
+    if (envT.position) model.position.set(envT.position.x, envT.position.y, envT.position.z);
+    if (envT.quaternion) model.quaternion.set(envT.quaternion.x, envT.quaternion.y, envT.quaternion.z, envT.quaternion.w);
+    if (envT.scale) model.scale.set(envT.scale.x, envT.scale.y, envT.scale.z);
+    console.log(`[Main] 背景 transform:`, envT);
+  } else {
+    const envScale = (currentLevel && currentLevel.environmentScale) || 1;
+    if (envScale !== 1) {
+      model.scale.setScalar(envScale);
+      console.log(`[Main] 背景缩放: ×${envScale}`);
+    }
+  }
+}
+
 // ===================== Step 1: 加载静态环境 =====================
-async function loadEnvironment(pathOverride) {
+async function loadEnvironment(pathOverride, gen = loadGeneration) {
   // 切换关卡时移除旧环境
   if (environmentModel) {
     scene.remove(environmentModel);
@@ -621,9 +891,13 @@ async function loadEnvironment(pathOverride) {
   const envPath = pathOverride || (currentLevel && currentLevel.environmentPath) || '/models/背景版.glb';
   return new Promise((resolve, reject) => {
     console.log(`[Main] 加载背景环境: ${envPath}`);
-    gltfLoader.load(
-      envPath,
-      (gltf) => {
+    loadGLBWithRetry(envPath).then((gltf) => {
+        if (gen !== loadGeneration) {
+          console.log(`[Main] ⏭️ 背景 ${envPath} 迟到（已切关），丢弃`);
+          disposeObject3D(gltf.scene);
+          resolve();
+          return;
+        }
         const model = gltf.scene;
         model.position.set(0, 0, 0); // 世界原点对齐
         
@@ -637,20 +911,8 @@ async function loadEnvironment(pathOverride) {
         });
         
         // 应用关卡 transform（优先 environmentTransform，否则退化到旧 environmentScale）
-        const envT = currentLevel && currentLevel.environmentTransform;
-        if (envT) {
-          if (envT.position) model.position.set(envT.position.x, envT.position.y, envT.position.z);
-          if (envT.quaternion) model.quaternion.set(envT.quaternion.x, envT.quaternion.y, envT.quaternion.z, envT.quaternion.w);
-          if (envT.scale) model.scale.set(envT.scale.x, envT.scale.y, envT.scale.z);
-          console.log(`[Main] 背景 transform:`, envT);
-        } else {
-          const envScale = (currentLevel && currentLevel.environmentScale) || 1;
-          if (envScale !== 1) {
-            model.scale.setScalar(envScale);
-            console.log(`[Main] 背景缩放: ×${envScale}`);
-          }
-        }
-        
+        applyEnvironmentTransform(model);
+
         environmentModel = model;
         environmentModel.userData.isStatic = true;
         environmentModel.userData.envPath = envPath;
@@ -658,24 +920,45 @@ async function loadEnvironment(pathOverride) {
         
         console.log(`[Main] ✅ 背景环境已加载: ${envPath}`);
         resolve();
-      },
-      undefined,
-      (error) => {
-        console.error('[Main] ❌ 背景环境加载失败:', error);
-        reject(error);
-      }
-    );
+      }).catch((error) => {
+        // 背景纯装饰，缺了也能玩：不再让它中断关卡加载链
+        console.error('[Main] ❌ 背景环境加载失败（已重试）:', error);
+        environmentModel = null;
+        resolve();
+      });
   });
 }
 
+/**
+ * 把关卡的 targetOverrides（人工校准坐标）注入 TARGET_CONFIG。
+ * @param {THREE.Object3D|null} originalNode 参照模型节点，仅用于调试溯源
+ */
+function injectTargetOverrides(originalNode) {
+  console.log('[Main] 使用 targetOverrides 人工校准配置');
+  for (const [baseName, t] of Object.entries(currentLevel.targetOverrides)) {
+    TARGET_CONFIG[baseName] = {
+      position: new THREE.Vector3(t.position.x, t.position.y, t.position.z),
+      quaternion: new THREE.Quaternion(t.quaternion.x, t.quaternion.y, t.quaternion.z, t.quaternion.w),
+      scale: t.scale ? new THREE.Vector3(t.scale.x, t.scale.y, t.scale.z) : null,
+      isOccupied: false,
+      originalNode,
+    };
+    console.log(`[Main] ✅ 注入目标位置（人工校准）: ${baseName}`, t.position, t.scale || '(scale=1)');
+  }
+}
+
 // ===================== Step 2: 解析幽灵参照物 =====================
-async function loadGhostReference() {
+async function loadGhostReference(gen = loadGeneration) {
   const ghostPath = currentLevel.ghostPath;
   return new Promise((resolve, reject) => {
     console.log(`[Main] 加载幽灵参照物: ${ghostPath} (关卡:${currentLevel.name})`);
-    gltfLoader.load(
-      ghostPath,
-      (gltf) => {
+    loadGLBWithRetry(ghostPath).then((gltf) => {
+        if (gen !== loadGeneration) {
+          console.log(`[Main] ⏭️ 幽灵 ${ghostPath} 迟到（已切关），丢弃`);
+          disposeObject3D(gltf.scene);
+          resolve();
+          return;
+        }
         const model = gltf.scene;
         // 应用关卡指定的 ghostTransform（仅影响视觉，不影响 targetOverrides 数据驱动的吸附）
         const gt = currentLevel.ghostTransform;
@@ -690,17 +973,7 @@ async function loadGhostReference() {
         // 分支 A：targetOverrides 不为空 → 用人工校准的目标配置（整体建模成品走这条路）
         // 分支 B：targetOverrides 为 null → 自动从 ghost 内部"配套"mesh 提取（第一关走这条路）
         if (currentLevel.targetOverrides) {
-          console.log('[Main] 使用 targetOverrides 人工校准配置');
-          for (const [baseName, t] of Object.entries(currentLevel.targetOverrides)) {
-            TARGET_CONFIG[baseName] = {
-              position: new THREE.Vector3(t.position.x, t.position.y, t.position.z),
-              quaternion: new THREE.Quaternion(t.quaternion.x, t.quaternion.y, t.quaternion.z, t.quaternion.w),
-              scale: t.scale ? new THREE.Vector3(t.scale.x, t.scale.y, t.scale.z) : null,
-              isOccupied: false,
-              originalNode: model,
-            };
-            console.log(`[Main] ✅ 注入目标位置（人工校准）: ${baseName}`, t.position, t.scale || '(scale=1)');
-          }
+          injectTargetOverrides(model);
         } else {
         model.traverse((node) => {
           if (node.isMesh && node.name && node.name.includes('配套')) {
@@ -752,26 +1025,35 @@ async function loadGhostReference() {
         console.log("==================================");
         
         resolve();
-      },
-      undefined,
-      (error) => {
-        console.error('[Main] ❌ 幽灵参照物加载失败:', error);
+      }).catch((error) => {
+        if (gen !== loadGeneration) { resolve(); return; }
+        console.error('[Main] ❌ 幽灵参照物加载失败（已重试）:', error);
+        // 降级：targetOverrides 为人工校准的硬编码坐标，不依赖 ghost 模型内容，
+        // 所以参照模型缺失时拼装逻辑照旧可用，只是少了"成品长什么样"的视觉参考。
+        if (currentLevel.targetOverrides) {
+          injectTargetOverrides(null);
+          ghostModel = null;
+          showToast('参照模型加载失败，拼装不受影响', 2600, 'info');
+          resolve();
+          return;
+        }
         reject(error);
-      }
-    );
+      });
   });
 }
 
 // ===================== Step 3: 生成玩家组件 =====================
-async function loadInteractivePieces() {
+async function loadInteractivePieces(gen = loadGeneration) {
   const prefix = currentLevel.piecePathPrefix || '/models/';
   const loadPromises = PIECE_NAMES.map((pieceName, index) => {
-    return new Promise((resolve, reject) => {
-      const url = `${prefix}${pieceName}.glb`;
-      console.log(`[Main] 加载组件 [${index + 1}/${PIECE_NAMES.length}]: ${url}`);
-      gltfLoader.load(
-        url,
-        (gltf) => {
+    const url = `${prefix}${pieceName}.glb`;
+    console.log(`[Main] 加载组件 [${index + 1}/${PIECE_NAMES.length}]: ${url}`);
+    return loadGLBWithRetry(url).then((gltf) => {
+          if (gen !== loadGeneration) {
+            console.log(`[Main] ⏭️ 组件 ${pieceName} 迟到（已切关），丢弃`);
+            disposeObject3D(gltf.scene);
+            return;
+          }
           const model = gltf.scene;
           
           // ✅ 调试：检查模型原始缩放（Blender导出后应该是1.0）
@@ -854,19 +1136,24 @@ async function loadInteractivePieces() {
           scene.add(model);
           
           console.log(`[Main] ✅ 组件 ${pieceName} 已加载并添加到场景`);
-          resolve();
-        },
-        undefined,
-        (error) => {
-          console.error(`[Main] ❌ 组件 ${pieceName} 加载失败:`, error);
-          reject(error);
-        }
-      );
+    }).catch((error) => {
+      console.error(`[Main] ❌ 组件 ${pieceName} 加载失败（已重试）:`, error);
+      throw new Error(pieceName);
     });
   });
-  
-  await Promise.all(loadPromises);
-  console.log('[Main] ✅ 所有玩家组件已加载到备料架');
+
+  // 用 allSettled 而非 all：个别构件下载失败时不能连带掀掉后续的成品展示、
+  // HUD 刷新与相机复位，否则玩家看到的是"少了几件 + 机位不对"的半成品场景。
+  const results = await Promise.allSettled(loadPromises);
+  const failedPieces = results
+    .filter((r) => r.status === 'rejected')
+    .map((r) => r.reason?.message || '未知构件');
+  if (failedPieces.length > 0) {
+    console.error(`[Main] ❌ ${failedPieces.length} 个构件加载失败：`, failedPieces);
+    showToast(`${failedPieces.length} 个构件加载失败，请刷新页面重试`, 4000, 'error');
+  } else {
+    console.log('[Main] ✅ 所有玩家组件已加载到备料架');
+  }
   
   // ✅ 调试：打印玩家组件对账单
   console.log("=== [DEBUG] 玩家组件加载对账单 ===");
@@ -885,50 +1172,64 @@ async function loadInteractivePieces() {
  * 摆在拼接区左侧，作为玩家的"目标长什么样"的视觉参照。
  * 第一关 currentLevel.showcasePath 为 null，此函数静默返回。
  */
-async function loadShowcaseModel() {
+/** 摆位 + 实色化 + 入场：ghost 克隆与独立加载两条路径共用 */
+function setupShowcase(model, source) {
+  // 优先 showcaseTransform（含 position + quaternion + scale），退化到旧 showcasePosition
+  const st = currentLevel.showcaseTransform;
+  if (st) {
+    if (st.position) model.position.set(st.position.x, st.position.y, st.position.z);
+    if (st.quaternion) model.quaternion.set(st.quaternion.x, st.quaternion.y, st.quaternion.z, st.quaternion.w);
+    if (st.scale) model.scale.set(st.scale.x, st.scale.y, st.scale.z);
+  } else {
+    const sp = currentLevel.showcasePosition || { x: -3.5, y: 0, z: 0 };
+    model.position.set(sp.x, sp.y, sp.z);
+  }
+  model.visible = true;
+  model.traverse((node) => {
+    node.visible = true; // ghost 默认隐藏，克隆过来必须显式放开
+    if (node.isMesh && node.material) {
+      node.material = node.material.clone();
+      node.material.transparent = false;
+      node.material.opacity = 1.0;
+      node.material.depthWrite = true;
+      // 性能：showcase 不参与阴影计算（避免大模型 shadow map 开销翻倍）
+      node.castShadow = false;
+      node.receiveShadow = false;
+    }
+  });
+  showcaseModel = model;
+  scene.add(showcaseModel);
+  const tag = st ? 'transform' : `pos(${model.position.x.toFixed(2)},${model.position.y.toFixed(2)},${model.position.z.toFixed(2)})`;
+  console.log(`[Showcase] ✅ 实体成品已就位 @ ${tag}（来源：${source}）`);
+}
+
+async function loadShowcaseModel(gen = loadGeneration) {
   if (!currentLevel.showcasePath) {
     showcaseModel = null;
     return;
   }
+  // 成品与参照指向同一个 GLB 时（第二、三关）直接克隆已加载的 ghost：
+  // 省掉一次几十 MB 的重复下载，线上冷缓存下这一次就要上百秒。
+  if (ghostModel && currentLevel.showcasePath === currentLevel.ghostPath) {
+    setupShowcase(ghostModel.clone(true), 'ghost 克隆');
+    return;
+  }
   return new Promise((resolve) => {
     console.log(`[Showcase] 加载实体成品: ${currentLevel.showcasePath}`);
-    gltfLoader.load(
-      currentLevel.showcasePath,
-      (gltf) => {
-        const model = gltf.scene;
-        // 优先 showcaseTransform（含 position + quaternion + scale），退化到旧 showcasePosition
-        const st = currentLevel.showcaseTransform;
-        if (st) {
-          if (st.position) model.position.set(st.position.x, st.position.y, st.position.z);
-          if (st.quaternion) model.quaternion.set(st.quaternion.x, st.quaternion.y, st.quaternion.z, st.quaternion.w);
-          if (st.scale) model.scale.set(st.scale.x, st.scale.y, st.scale.z);
-        } else {
-          const sp = currentLevel.showcasePosition || { x: -3.5, y: 0, z: 0 };
-          model.position.set(sp.x, sp.y, sp.z);
+    loadGLBWithRetry(currentLevel.showcasePath).then((gltf) => {
+        if (gen !== loadGeneration) {
+          console.log('[Showcase] ⏭️ 实体成品迟到（已切关），丢弃');
+          disposeObject3D(gltf.scene);
+          resolve();
+          return;
         }
-        model.traverse((node) => {
-          if (node.isMesh && node.material) {
-            node.material = node.material.clone();
-            node.material.transparent = false;
-            node.material.opacity = 1.0;
-            // 性能：showcase 不参与阴影计算（避免大模型 shadow map 开销翻倍）
-            node.castShadow = false;
-            node.receiveShadow = false;
-          }
-        });
-        showcaseModel = model;
-        scene.add(showcaseModel);
-        const tag = st ? 'transform' : `pos(${model.position.x.toFixed(2)},${model.position.y.toFixed(2)},${model.position.z.toFixed(2)})`;
-        console.log(`[Showcase] ✅ 实体成品已就位 @ ${tag}`);
+        setupShowcase(gltf.scene, '独立下载');
         resolve();
-      },
-      undefined,
-      (err) => {
+      }).catch((err) => {
         console.warn(`[Showcase] ⚠️ 加载失败（路径未配置或文件缺失）: ${err.message || err}`);
         showcaseModel = null;
         resolve(); // 加载失败不阻塞游戏
-      }
-    );
+      });
   });
 }
 
@@ -974,10 +1275,14 @@ async function loadLevel(index) {
   ASSEMBLY_ORDER = [];
 
   // 4. 清残留特效（与 resetLevel 第 3-7 步类似）
-  victoryParticles.forEach(p => { scene.remove(p.mesh); p.mesh.geometry.dispose(); p.mesh.material.dispose(); });
+  victoryParticles.forEach(p => { scene.remove(p.mesh); p.mesh.geometry?.dispose?.(); p.mesh.material.dispose(); });
   victoryParticles.length = 0;
   victoryEffectActive = false;
-  snapPulses.forEach(p => { scene.remove(p.mesh); p.mesh.geometry.dispose(); p.mesh.material.dispose(); });
+  snapPulses.forEach(p => {
+    if (p.type === 'glow') { p.mats.forEach(({ m, orig, origI }) => { m.emissive.setHex(orig); m.emissiveIntensity = origI; }); return; }
+    if (!p.mesh) return;
+    scene.remove(p.mesh); p.mesh.geometry?.dispose?.(); p.mesh.material.dispose();
+  });
   snapPulses.length = 0;
   if (hintEnabled) { hideHintPreview(); hintEnabled = false; }
   if (proximityActive) { hideProximityHint(); proximityActive = false; }
@@ -999,25 +1304,43 @@ async function loadLevel(index) {
 
   applyLevelConfig(index);
 
+  // 开新加载代号：作废所有仍在路上的旧请求（init 首关或上一次切关的迟到模型）
+  const gen = ++loadGeneration;
+  const superseded = () => {
+    if (gen === loadGeneration) return false;
+    console.log(`[Level] ⏭️ 关卡 ${index + 1} 的加载已被更新的切关请求取代，中止`);
+    return true;
+  };
+
   try {
-    // 6.0 切换背景（仅当新关卡指定了不同的 environmentPath 时）
+    // 6.0 切换背景：路径不同才重新下载；路径相同（如第二/三关共用
+    // level2-scene.glb）时复用模型，但必须重新应用本关的环境姿态——
+    // 两关的 environmentTransform 不同，沿用旧姿态会导致背景朝向/大小错误
     const newEnvPath = currentLevel.environmentPath;
     const currentEnvPath = environmentModel?.userData?.envPath;
     if (newEnvPath && newEnvPath !== currentEnvPath) {
       console.log(`[Level] 切换背景: ${currentEnvPath || '(无)'} → ${newEnvPath}`);
-      await loadEnvironment(newEnvPath);
+      await loadEnvironment(newEnvPath, gen);
+      if (superseded()) return;
       if (environmentModel) environmentModel.userData.envPath = newEnvPath;
+    } else if (environmentModel) {
+      console.log('[Level] 背景同文件复用，重新应用本关环境姿态');
+      applyEnvironmentTransform(environmentModel);
     }
     // 6.1-6.4
-    await loadGhostReference();
+    await loadGhostReference(gen);
+    if (superseded()) return;
     buildAssemblyOrder();
-    await loadInteractivePieces();
-    await loadShowcaseModel();
+    await loadInteractivePieces(gen);
+    if (superseded()) return;
+    await loadShowcaseModel(gen);
+    if (superseded()) return;
     updateHUDStatus();
     // 6.5 新关卡：平滑飞到本关默认机位（含手势识别基准）
     if (index !== 0) resetCameraToDefault();
     // 6.6 引导：在备料架上柔和高亮"下一应装构件"（第二关首步=集合陆，逐层向上推进）
     refreshNextPiecePulse();
+    levelStartTs = performance.now();
     showToast(`${currentLevel.name} 已就绪`, 1800, 'success');
     console.log(`[Level] ✅ 关卡 ${index + 1} 加载完成`);
   } catch (err) {
@@ -1054,6 +1377,56 @@ let nextPiecePulseStartTime = 0;    // 性能时间戳，用于正弦相位
 // 中央气泡定时器（避免多次调用相互覆盖）
 let toastTimerId = null;
 
+// 本关开始计时（用于结算卡"用时"统计）：loadLevel 成功 / resetLevel / 点击开始时重置
+let levelStartTs = 0;
+
+// 千钧一刻：HUD 实时计时（仅 ?timed=1 时显示）
+let timedChipTimer = null;
+function startTimedChip() {
+  if (!IS_TIMED || timedChipTimer) return;
+  const hudTop = document.querySelector('.hud-top');
+  if (!hudTop) return;
+  const chip = document.createElement('div');
+  chip.id = 'timed-chip';
+  chip.style.cssText = `
+    display:flex;align-items:center;gap:8px;flex-shrink:0;
+    padding:8px 18px;border:1px solid rgba(201,162,75,0.55);border-radius:999px;
+    background:rgba(19,14,8,0.75);color:#c9a24b;
+    font-family:Consolas,monospace;font-size:1.05rem;letter-spacing:1px;
+  `;
+  chip.innerHTML = '⏱ <span id="timed-chip-text">00:00</span>';
+  hudTop.insertBefore(chip, hudTop.children[1] || null);
+  timedChipTimer = setInterval(() => {
+    const el = document.getElementById('timed-chip-text');
+    if (!el || levelStartTs <= 0) return;
+    const s = Math.floor((performance.now() - levelStartTs) / 1000);
+    el.textContent = `${String(Math.floor(s / 60)).padStart(2, '0')}:${String(s % 60).padStart(2, '0')}`;
+  }, 250);
+}
+
+// 识别信号监视器：每 0.5s 把 HandInput.getSignal() 映射到指引卡的信号灯
+let signalTimerId = null;
+function startSignalMonitor() {
+  const box = document.getElementById('guide-signal');
+  if (!box || signalTimerId) return;
+  const tip = document.getElementById('gs-tip');
+  signalTimerId = setInterval(() => {
+    if (!handInput || !handInput.isConnected() || typeof handInput.getSignal !== 'function') {
+      box.dataset.level = '0';
+      if (tip) tip.textContent = '';
+      return;
+    }
+    const s = handInput.getSignal();
+    const lvl = s.quality > 0.72 ? 3 : s.quality > 0.38 ? 2 : 1;
+    box.dataset.level = String(lvl);
+    if (tip) {
+      tip.textContent = s.bright
+        ? '☀ 强光增强已启用'
+        : (lvl === 1 ? '请将手移入画面中央' : '');
+    }
+  }, 500);
+}
+
 /**
  * 更新顶部状态栏：显示当前应该拼装的构件
  * 调用时机：初始化完成 / 每次成功吸附后
@@ -1065,6 +1438,11 @@ function updateHUDStatus() {
   // 找当前还没完成的第一步
   const remaining = getCurrentStepPieces();
 
+  // 装配进度：已吸附数 / 总数（评委一眼看懂还剩多少）
+  const total = interactivePieces.length;
+  const done = interactivePieces.filter((p) => p.userData.isSnapped).length;
+  const progress = total > 0 ? `〔 ${done} / ${total} 〕 ` : '';
+
   if (remaining.length === 0) {
     el.textContent = '🎉 拼接完成！';
     // 全部完成时自动关掉提示
@@ -1073,9 +1451,9 @@ function updateHUDStatus() {
   }
   const displayList = remaining.map(getDisplayName);
   if (displayList.length === 1) {
-    el.textContent = `当前请安装：${displayList[0]}`;
+    el.textContent = `${progress}当前请安装：${displayList[0]}`;
   } else {
-    el.textContent = `当前请安装：${displayList.join(' 或 ')}`;
+    el.textContent = `${progress}当前请安装：${displayList.join(' 或 ')}`;
   }
 
   // 提示模式开启时，每次状态变化自动跳到新目标
@@ -2198,6 +2576,22 @@ function showFinishCard() {
     font-family: var(--font-body, system-ui);
   `;
 
+  // 用时统计（从关卡就绪到全部拼完）
+  const elapsedMs = levelStartTs > 0 ? performance.now() - levelStartTs : 0;
+  const mm = Math.floor(elapsedMs / 60000);
+  const ss = Math.floor((elapsedMs % 60000) / 1000);
+  const elapsedText = elapsedMs > 0 ? `${mm > 0 ? mm + ' 分 ' : ''}${ss} 秒` : '';
+
+  // 藏宝阁成就：通关记录 + 千钧一刻最佳成绩
+  const rank = timedRank(currentLevel.id, elapsedMs / 1000);
+  try {
+    markForged(currentLevel.id, elapsedMs);
+    if (IS_TIMED && elapsedMs > 0) markTimed(currentLevel.id, elapsedMs, rank);
+  } catch (_) {}
+  const rankBadge = IS_TIMED && elapsedMs > 0
+    ? `<span style="display:inline-block;margin-left:10px;padding:2px 14px;border-radius:999px;background:${rank === 'S' ? '#c8392b' : rank === 'A' ? '#c9a24b' : 'rgba(243,234,217,0.2)'};color:#fff;font-weight:700;">${rank} 级</span>`
+    : '';
+
   card.innerHTML = `
     <div style="text-align:center;font-size:0.85rem;letter-spacing:4px;color:#c8a063;margin-bottom:6px;">
       ◆◆◆  搭 建 完 成  ◆◆◆
@@ -2205,9 +2599,15 @@ function showFinishCard() {
     <h2 style="text-align:center;font-size:1.85rem;margin:8px 0 4px;color:#ffd24a;font-weight:600;letter-spacing:2px;">
       ${FINISH_CARD_LORE.title}
     </h2>
-    <div style="text-align:center;font-size:0.95rem;color:#d8b88a;margin-bottom:22px;letter-spacing:1px;">
+    <div style="text-align:center;font-size:0.95rem;color:#d8b88a;margin-bottom:${elapsedText ? '10px' : '22px'};letter-spacing:1px;">
       ${FINISH_CARD_LORE.subtitle}
     </div>
+    ${elapsedText ? `
+    <div style="text-align:center;margin-bottom:20px;">
+      <span style="display:inline-block;padding:4px 18px;border:1px solid rgba(201,162,75,0.45);border-radius:999px;font-size:0.85rem;letter-spacing:2px;color:#c9a24b;">
+        本次用时 · ${elapsedText}
+      </span>${rankBadge}
+    </div>` : ''}
     <div style="height:1px;background:linear-gradient(90deg, transparent, rgba(255,215,0,0.35), transparent);margin:0 0 22px;"></div>
     <div style="font-size:1rem;line-height:1.85;color:#e8dcc8;text-align:justify;">
       ${FINISH_CARD_LORE.body}
@@ -2356,7 +2756,7 @@ function resetLevel() {
   // 3. 清除胜利粒子（可能还在动画中）
   victoryParticles.forEach(p => {
     scene.remove(p.mesh);
-    p.mesh.geometry.dispose();
+    p.mesh.geometry?.dispose?.();
     p.mesh.material.dispose();
   });
   victoryParticles.length = 0;
@@ -2364,8 +2764,10 @@ function resetLevel() {
 
   // 4. 清除残留吸附脉冲
   snapPulses.forEach(p => {
+    if (p.type === 'glow') { p.mats.forEach(({ m, orig, origI }) => { m.emissive.setHex(orig); m.emissiveIntensity = origI; }); return; }
+    if (!p.mesh) return;
     scene.remove(p.mesh);
-    p.mesh.geometry.dispose();
+    p.mesh.geometry?.dispose?.();
     p.mesh.material.dispose();
   });
   snapPulses.length = 0;
@@ -2404,7 +2806,8 @@ function resetLevel() {
   document.getElementById('finish-card-overlay')?.remove();
   document.getElementById('knowledge-overlay')?.remove();
 
-  // 10. 刷新 HUD
+  // 10. 刷新 HUD + 重置本关计时
+  levelStartTs = performance.now();
   updateHUDStatus();
   // 11. 重新点亮"下一应装构件"的备料架引导脉冲（重置后通常仍然是首步）
   refreshNextPiecePulse();
@@ -2430,46 +2833,102 @@ function spawnVictoryParticles() {
   if (count > 0) center.divideScalar(count);
   else center.set(0, 1.85, 0);
 
-  const PARTICLE_COUNT = 60;
-  const COLORS = [0xffd700, 0xffae42, 0xffe89c, 0xff8c42]; // 金/橙金/浅金/朱
+  const now = performance.now();
+  const COLORS = [0xffd24a, 0xffb648, 0xfff0c0, 0xff9a52]; // 鎏金 / 琥珀 / 米金 / 暖橙
 
-  for (let i = 0; i < PARTICLE_COUNT; i++) {
+  // 1. 中心光柱：柔光圆柱自地面升起，托住整攒斗拱（仪式感的主角）
+  const beam = new THREE.Mesh(
+    new THREE.CylinderGeometry(0.34, 0.5, 3.2, 24, 1, true),
+    new THREE.MeshBasicMaterial({
+      color: 0xffd880,
+      transparent: true,
+      opacity: 0,
+      depthWrite: false,
+      side: THREE.DoubleSide,
+      blending: THREE.AdditiveBlending,
+    })
+  );
+  beam.position.set(center.x, center.y + 0.9, center.z);
+  scene.add(beam);
+  victoryParticles.push({ mesh: beam, type: 'beam', startTime: now, lifetime: 2600 });
+
+  // 2. 地面冲击环 ×2：错峰从中心扩散的水平金环
+  [{ delay: 0, life: 900, max: 6 }, { delay: 260, life: 1100, max: 8.5 }].forEach((spec) => {
+    const ring = new THREE.Mesh(
+      new THREE.RingGeometry(0.3, 0.4, 56),
+      new THREE.MeshBasicMaterial({
+        color: 0xffd24a,
+        transparent: true,
+        opacity: 0.85,
+        depthWrite: false,
+        side: THREE.DoubleSide,
+        blending: THREE.AdditiveBlending,
+      })
+    );
+    ring.rotation.x = -Math.PI / 2;
+    ring.position.set(center.x, Math.max(0.06, center.y - 0.45), center.z);
+    scene.add(ring);
+    victoryParticles.push({ mesh: ring, type: 'shockwave', startTime: now + spec.delay, lifetime: spec.life, maxScale: spec.max });
+  });
+
+  // 3. 螺旋升腾金尘：52 颗软光斑（辉光 sprite），螺旋上升 + 闪烁
+  for (let i = 0; i < 52; i++) {
     const radius = 0.25 + Math.random() * 1.4;
     const angle = Math.random() * Math.PI * 2;
-    const yOffset = (Math.random() - 0.3) * 0.6;
-
-    const size = 0.025 + Math.random() * 0.035;
-    const geo = new THREE.SphereGeometry(size, 8, 8);
-    const color = COLORS[Math.floor(Math.random() * COLORS.length)];
-    const mat = new THREE.MeshBasicMaterial({
-      color: color,
-      transparent: true,
-      opacity: 1.0,
-      depthWrite: false,
-      blending: THREE.AdditiveBlending, // 加色混合让金光叠出辉光感
-    });
-    const mesh = new THREE.Mesh(geo, mat);
-    mesh.position.set(
+    const sprite = makeGlowSprite(
+      COLORS[Math.floor(Math.random() * COLORS.length)],
+      0.07 + Math.random() * 0.13
+    );
+    sprite.position.set(
       center.x + Math.cos(angle) * radius,
-      center.y + yOffset,
+      center.y + (Math.random() - 0.3) * 0.6,
       center.z + Math.sin(angle) * radius
     );
-    scene.add(mesh);
-
+    scene.add(sprite);
     victoryParticles.push({
-      mesh,
+      mesh: sprite,
+      type: 'spark',
       center: center.clone(),
       angle,
       radius,
-      yOffset,
-      vy: 0.4 + Math.random() * 0.6,           // 上升速度（米/秒）
-      angularSpeed: 0.8 + Math.random() * 1.6, // 弧度/秒
-      radiusShrink: 0.15 + Math.random() * 0.35, // 半径收缩比例
-      startTime: performance.now(),
-      lifetime: 3500 + Math.random() * 1500,
+      yOffset: (Math.random() - 0.3) * 0.6,
+      vy: 0.4 + Math.random() * 0.6,
+      angularSpeed: 0.8 + Math.random() * 1.6,
+      radiusShrink: 0.15 + Math.random() * 0.35,
+      twinklePhase: Math.random() * Math.PI * 2,
+      startTime: now + Math.random() * 500, // 错峰浮起
+      lifetime: 3200 + Math.random() * 1800,
     });
   }
-  console.log(`[Particles] 已生成 ${PARTICLE_COUNT} 颗金色粒子`);
+
+  // 4. 大光斑氛围层：8 颗大而淡的光晕缓慢漂浮（景深感）
+  for (let i = 0; i < 8; i++) {
+    const angle = Math.random() * Math.PI * 2;
+    const radius = 0.8 + Math.random() * 1.8;
+    const bokeh = makeGlowSprite(0xffe6a8, 0.4 + Math.random() * 0.35, 0.3);
+    bokeh.position.set(
+      center.x + Math.cos(angle) * radius,
+      center.y + Math.random() * 1.2,
+      center.z + Math.sin(angle) * radius
+    );
+    scene.add(bokeh);
+    victoryParticles.push({
+      mesh: bokeh,
+      type: 'bokeh',
+      center: center.clone(),
+      angle,
+      radius,
+      yOffset: Math.random() * 1.2,
+      vy: 0.12 + Math.random() * 0.15,
+      angularSpeed: 0.15 + Math.random() * 0.25,
+      radiusShrink: 0,
+      twinklePhase: Math.random() * Math.PI * 2,
+      startTime: now + Math.random() * 700,
+      lifetime: 4200 + Math.random() * 1200,
+    });
+  }
+
+  console.log('[Particles] 胜利特效 2.0：光柱 + 双冲击环 + 52 金尘 + 8 氛围光斑');
 }
 
 /**
@@ -2482,31 +2941,48 @@ function updateVictoryParticles() {
   for (let i = victoryParticles.length - 1; i >= 0; i--) {
     const p = victoryParticles[i];
     const elapsed = now - p.startTime;
+    if (elapsed < 0) { p.mesh.material.opacity = 0; continue; } // 错峰启动
     const t = Math.min(1, elapsed / p.lifetime);
 
     if (t >= 1) {
       scene.remove(p.mesh);
-      p.mesh.geometry.dispose();
+      p.mesh.geometry?.dispose?.();
       p.mesh.material.dispose();
       victoryParticles.splice(i, 1);
       continue;
     }
 
-    // easeOutQuad 让粒子前期快上升、后期减速
-    const ease = 1 - (1 - t) * (1 - t);
+    if (p.type === 'beam') {
+      // 光柱：快速亮起（前 18%）→ 持续微颤 → 缓慢熄灭（后 45%）
+      const rise = t < 0.18 ? t / 0.18 : 1;
+      const fade = t > 0.55 ? 1 - (t - 0.55) / 0.45 : 1;
+      const flicker = 0.9 + 0.1 * Math.sin(elapsed * 0.02);
+      p.mesh.material.opacity = 0.34 * rise * fade * flicker;
+      p.mesh.scale.set(1 + t * 0.35, rise, 1 + t * 0.35);
+      continue;
+    }
 
+    if (p.type === 'shockwave') {
+      // 地面冲击环：扩散 + 渐隐
+      const ease = 1 - Math.pow(1 - t, 3);
+      p.mesh.scale.setScalar(1 + ease * (p.maxScale - 1));
+      p.mesh.material.opacity = 0.85 * (1 - t);
+      continue;
+    }
+
+    // spark / bokeh：螺旋上升（bokeh 参数更慢更淡，同一套运动）
     const curAngle = p.angle + p.angularSpeed * (elapsed / 1000);
     const curRadius = p.radius * (1 - p.radiusShrink * t);
     p.mesh.position.x = p.center.x + Math.cos(curAngle) * curRadius;
     p.mesh.position.z = p.center.z + Math.sin(curAngle) * curRadius;
     p.mesh.position.y = p.center.y + p.yOffset + p.vy * (elapsed / 1000);
 
-    // 透明度：先稳定一阵再渐隐（前 60% 时间满透明，后 40% 渐隐）
-    if (t < 0.6) {
-      p.mesh.material.opacity = 1.0;
-    } else {
-      p.mesh.material.opacity = 1.0 - (t - 0.6) / 0.4;
-    }
+    // 透明度：淡入（前 12%）→ 闪烁保持 → 渐隐（后 40%）
+    const baseOp = p.type === 'bokeh' ? 0.3 : 1.0;
+    const fadeIn = t < 0.12 ? t / 0.12 : 1;
+    const fadeOut = t > 0.6 ? 1 - (t - 0.6) / 0.4 : 1;
+    const twinkle = p.type === 'bokeh' ? 1 : 0.8 + 0.2 * Math.sin(elapsed * 0.012 + p.twinklePhase);
+    p.mesh.material.opacity = baseOp * fadeIn * fadeOut * twinkle;
   }
 
   // 全部消散后释放标志
@@ -2715,13 +3191,69 @@ function updateGrabPulses() {
   }
 }
 
+// ===== 辉光贴图（软边光斑，一次生成全局复用）=====
+// 实心 SphereGeometry 粒子是"廉价感"的主要来源；换成径向渐变 Sprite 后
+// 粒子自带柔光边缘，加色混合下相互叠出真实的辉光。
+let _glowTexture = null;
+function getGlowTexture() {
+  if (_glowTexture) return _glowTexture;
+  const c = document.createElement('canvas');
+  c.width = c.height = 64;
+  const ctx = c.getContext('2d');
+  const g = ctx.createRadialGradient(32, 32, 0, 32, 32, 32);
+  g.addColorStop(0, 'rgba(255,255,255,1)');
+  g.addColorStop(0.25, 'rgba(255,232,160,0.9)');
+  g.addColorStop(0.6, 'rgba(255,190,80,0.32)');
+  g.addColorStop(1, 'rgba(255,170,60,0)');
+  ctx.fillStyle = g;
+  ctx.fillRect(0, 0, 64, 64);
+  _glowTexture = new THREE.CanvasTexture(c);
+  return _glowTexture;
+}
+
+function makeGlowSprite(color, size, opacity = 1) {
+  const sprite = new THREE.Sprite(new THREE.SpriteMaterial({
+    map: getGlowTexture(),
+    color,
+    transparent: true,
+    opacity,
+    depthWrite: false,
+    blending: THREE.AdditiveBlending,
+  }));
+  sprite.scale.setScalar(size);
+  sprite.renderOrder = 998;
+  return sprite;
+}
+
 /**
- * 单构件吸附时的短促反馈：3 层同心金环（参考图）+ 6 颗散点，错峰扩散
- * 替代原来的常驻金光晕，避免和槽位高亮抢信息
+ * 单构件吸附反馈 2.0「鎏金定榫」：
+ *   星芒爆闪（卡准瞬间的高光）+ 三层错峰金环 + 上升金屑（敲榫扬尘感）
+ *   + 构件本体 emissive 鎏金闪烁（最直接的"这一件成了"）
  */
 function spawnSnapPulse(piece) {
   const pos = piece.position.clone();
   const now = performance.now();
+
+  // 0. 星芒爆闪：一颗大辉光 sprite 快速胀开又熄灭（~260ms）
+  const flash = makeGlowSprite(0xfff2cc, 0.15);
+  flash.position.copy(pos);
+  scene.add(flash);
+  snapPulses.push({ mesh: flash, type: 'flash', startTime: now, lifetime: 260, basePos: pos.clone() });
+
+  // 0.5 构件本体鎏金闪烁：emissive 金色瞬亮再衰减（320ms 后还原）
+  const glowMats = [];
+  piece.traverse((o) => {
+    if (o.isMesh && o.material && o.material.emissive) {
+      glowMats.push({
+        m: o.material,
+        orig: o.material.emissive.getHex(),
+        origI: o.material.emissiveIntensity ?? 1,
+      });
+    }
+  });
+  if (glowMats.length) {
+    snapPulses.push({ mesh: null, type: 'glow', mats: glowMats, startTime: now, lifetime: 340 });
+  }
 
   // 三层同心金环：内环最快/最亮，外环最慢/最淡 — 营造"涟漪"层次感
   const ringSpecs = [
@@ -2756,30 +3288,26 @@ function spawnSnapPulse(piece) {
     });
   });
 
-  // 6 颗金色散点：以构件中心为圆心向外抛散
-  for (let i = 0; i < 6; i++) {
-    const angle = (i / 6) * Math.PI * 2 + Math.random() * 0.3;
-    const dot = new THREE.Mesh(
-      new THREE.SphereGeometry(0.025, 8, 8),
-      new THREE.MeshBasicMaterial({
-        color: 0xffd24a,
-        transparent: true,
-        opacity: 0.9,
-        depthWrite: false,
-        blending: THREE.AdditiveBlending,
-      })
+  // 上升金屑：12 颗辉光微粒向上飘散（敲榫扬起的金色木屑），带横向漂移
+  for (let i = 0; i < 12; i++) {
+    const angle = Math.random() * Math.PI * 2;
+    const spark = makeGlowSprite(
+      Math.random() < 0.3 ? 0xfff0c0 : 0xffd24a,
+      0.05 + Math.random() * 0.06,
+      0.95
     );
-    dot.position.copy(pos);
-    dot.renderOrder = 998;
-    scene.add(dot);
+    spark.position.copy(pos);
+    scene.add(spark);
     snapPulses.push({
-      mesh: dot,
-      type: 'dot',
-      startTime: now,
-      lifetime: 380,
+      mesh: spark,
+      type: 'spark',
+      startTime: now + Math.random() * 90, // 错峰出发
+      lifetime: 480 + Math.random() * 260,
       basePos: pos.clone(),
       angle,
-      maxRadius: 0.35 + Math.random() * 0.25,
+      driftR: 0.12 + Math.random() * 0.3,   // 横向漂移半径
+      riseH: 0.35 + Math.random() * 0.4,    // 上升高度
+      spin: (Math.random() - 0.5) * 4,      // 漂移角速度
     });
   }
 }
@@ -2792,14 +3320,22 @@ function updateSnapPulses() {
     // delay 期间还没开始，先保持隐藏
     const elapsed = now - p.startTime;
     if (elapsed < 0) {
-      p.mesh.material.opacity = 0;
+      if (p.mesh) p.mesh.material.opacity = 0;
       continue;
     }
     const t = elapsed / p.lifetime;
     if (t >= 1) {
-      scene.remove(p.mesh);
-      p.mesh.geometry.dispose();
-      p.mesh.material.dispose();
+      if (p.type === 'glow') {
+        // 还原构件材质
+        p.mats.forEach(({ m, orig, origI }) => {
+          m.emissive.setHex(orig);
+          m.emissiveIntensity = origI;
+        });
+      } else if (p.mesh) {
+        scene.remove(p.mesh);
+        p.mesh.geometry?.dispose?.();
+        p.mesh.material.dispose();
+      }
       snapPulses.splice(i, 1);
       continue;
     }
@@ -2809,14 +3345,35 @@ function updateSnapPulses() {
       const baseOp = p.baseOpacity || 0.85;
       p.mesh.scale.setScalar(1 + t * (maxScale - 1));
       p.mesh.material.opacity = baseOp * (1 - t);
+    } else if (p.type === 'flash') {
+      // 星芒爆闪：前 35% 急速胀开，随后收缩淡出
+      const grow = t < 0.35 ? t / 0.35 : 1;
+      const shrink = t < 0.35 ? 1 : 1 - (t - 0.35) / 0.65;
+      p.mesh.scale.setScalar(0.15 + grow * 0.85);
+      p.mesh.material.opacity = Math.max(0, shrink);
+    } else if (p.type === 'glow') {
+      // 构件鎏金闪烁：金色 emissive 快闪后指数衰减
+      const k = Math.max(0, 1 - t);
+      p.mats.forEach(({ m }) => {
+        m.emissive.setHex(0xd4a017);
+        m.emissiveIntensity = 0.85 * k * k;
+      });
+    } else if (p.type === 'spark') {
+      // 上升金屑：缓升 + 螺旋漂移 + 尾段渐隐
+      const ease = 1 - (1 - t) * (1 - t);
+      const a = p.angle + p.spin * t;
+      p.mesh.position.x = p.basePos.x + Math.cos(a) * p.driftR * ease;
+      p.mesh.position.z = p.basePos.z + Math.sin(a) * p.driftR * ease;
+      p.mesh.position.y = p.basePos.y + p.riseH * ease;
+      const twinkle = 0.85 + 0.15 * Math.sin(elapsed * 0.03 + p.angle * 7);
+      p.mesh.material.opacity = (t < 0.55 ? 0.95 : 0.95 * (1 - (t - 0.55) / 0.45)) * twinkle;
     } else {
-      // 散点：圆周扩散 + 轻微抛物线 + 渐隐
-      const r = p.maxRadius * t;
+      // 兼容旧散点（如仍有残留）
+      const r = (p.maxRadius || 0.3) * t;
       p.mesh.position.x = p.basePos.x + Math.cos(p.angle) * r;
       p.mesh.position.z = p.basePos.z + Math.sin(p.angle) * r;
       p.mesh.position.y = p.basePos.y + 0.12 * Math.sin(t * Math.PI);
       p.mesh.material.opacity = 0.9 * (1 - t);
-      p.mesh.scale.setScalar(1 - t * 0.6);
     }
   }
 }
@@ -3355,13 +3912,40 @@ function setupUIEvents() {
       }
     });
 
+    // 关卡选择卡：默认选中 URL 指定关卡，点击切换（真正加载发生在"开始筑梦"时）
+    let menuLevelIdx = currentLevelIndex;
+    const levelCards = document.querySelectorAll('.level-card');
+    const syncLevelCards = () => {
+      levelCards.forEach((c) => c.classList.toggle('on', Number(c.dataset.levelIdx) === menuLevelIdx));
+    };
+    syncLevelCards();
+    levelCards.forEach((c) => {
+      c.addEventListener('click', (e) => {
+        e.preventDefault();
+        e.stopPropagation();
+        menuLevelIdx = Number(c.dataset.levelIdx);
+        syncLevelCards();
+      });
+    });
+
     // 开始筑梦按钮
     if (btnStart) {
       btnStart.addEventListener('click', async (e) => {
         e.preventDefault();
         e.stopPropagation();
         console.log('[Main] ✅ 开始筑梦按钮被点击');
-        
+
+        // 若菜单里选择了另一关，先切换（loadLevel 内部完成模型加载与状态重置）
+        if (menuLevelIdx !== currentLevelIndex) {
+          const span = btnStart.querySelector('span');
+          if (span) span.textContent = '关卡加载中…';
+          try {
+            await loadLevel(menuLevelIdx);
+          } finally {
+            if (span) span.textContent = '开始筑梦';
+          }
+        }
+
         if (pageMenu) pageMenu.classList.add('hidden');
         if (gameHud) gameHud.style.display = 'flex';
         if (renderer) {
@@ -3379,6 +3963,9 @@ function setupUIEvents() {
         try {
           await handInput.start();
           cursorSphere.visible = true;
+          startSignalMonitor();
+          startTimedChip();
+          levelStartTs = performance.now();
           console.log('[Main] ✅ 手势输入已启动');
         } catch (error) {
           console.error('[Main] ❌ 手势输入启动失败:', error);
@@ -3417,7 +4004,8 @@ function setupUIEvents() {
         } catch (err) {}
 
         // 立刻跳转，不等 MediaPipe / Three.js 清理（浏览器卸载时自动释放）
-        window.location.href = './index.html';
+        // 回新版门户首页（home2 新线）；旧版门户仍可通过 /index.html 直接访问
+        window.location.href = './home2.html';
       });
     }
   };
@@ -3508,7 +4096,12 @@ function animate() {
           console.log(`[Main] ✋ 抓取 ${closestPiece.userData.partID}，屏幕距离: ${closestDist.toFixed(3)} NDC`);
         }
       } else if (grabbedObject) {
-        // === 拖动中：直接跟随 cursor + 智能 Z + 近距离自动磁吸 ===
+        // ╔══════════════════════════════════════════════════════════════╗
+        // ║  三阶段磁吸算法 · 远跟手 / 中渐进 / 近锁定                     ║
+        // ║  far  ( xyDist >  1.50 ) → 完全跟随光标，自由把玩              ║
+        // ║  mid  ( 0.20 ~ 1.50    ) → smoothstep 插值位姿，营造磁力体感   ║
+        // ║  near ( xyDist <  0.20 ) → 直接锁定到 target，松手必中         ║
+        // ╚══════════════════════════════════════════════════════════════╝
         // 所见即所得：piece XY 直接 = cursor XY，Z 根据离 target 的 XY 距离三段式插值
         const cur = cursorSphere.position;
         const tgt = TARGET_CONFIG[grabbedObject.userData.partID];
@@ -3517,12 +4110,12 @@ function animate() {
           const dy = cur.y - tgt.position.y;
           const xyDist = Math.sqrt(dx * dx + dy * dy);
           if (xyDist < 0.20) {
-            // 磁吸区：位置 + 旋转 + 缩放 都锁定到 target，松手必中
+            // 【近段】磁吸区：位置 + 旋转 + 缩放 都锁定到 target，松手必中
             grabbedObject.position.copy(tgt.position);
             grabbedObject.quaternion.copy(tgt.quaternion);
             if (tgt.scale) grabbedObject.scale.copy(tgt.scale);
     } else {
-            // 智能区：XY 跟 cursor，Z 在中区逐渐插值到 target.z
+            // 【中段】智能区：XY 跟 cursor，Z / Quat / Scale 用 smoothstep 渐进对齐
             const t = THREE.MathUtils.smoothstep(xyDist, 0.20, 1.5);
             const blendedZ = THREE.MathUtils.lerp(tgt.position.z, cur.z, t);
             grabbedObject.position.set(cur.x, cur.y, blendedZ);
@@ -3536,6 +4129,7 @@ function animate() {
             }
           }
         } else {
+          // 【远段】完全跟手：构件 XY/Z 直接复用 cursor，体感等同自由抓取
           grabbedObject.position.copy(cur);
         }
       }

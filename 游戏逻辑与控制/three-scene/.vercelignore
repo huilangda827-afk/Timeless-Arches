@@ -1,0 +1,11 @@
+node_modules
+dist
+dist-ssr
+.preview.log
+*.log
+*.bak
+index.html.bak
+.vscode
+.idea
+.DS_Store
+scripts/share-lan.mjs

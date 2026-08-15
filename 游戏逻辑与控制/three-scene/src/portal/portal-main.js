@@ -128,8 +128,8 @@ const SPOTS = {
     { name: '赵州桥', toast: AI_TOAST('赵州桥'), x: 23.9, y: 61.5, w: 23.2, h: 32.8 },
     { name: '晋祠圣母殿', toast: AI_TOAST('晋祠圣母殿'), x: 49.3, y: 61.5, w: 23.2, h: 32.8 },
     { name: '岳阳楼', toast: AI_TOAST('岳阳楼'), x: 74.7, y: 61.5, w: 23.2, h: 32.8 },
-    { name: '探微按钮组', action: 'explore-direct', x: 31.5, y: 50.0, w: 6.8, h: 4.0 },
-    { name: '筑梦按钮组', action: 'forge-direct', x: 40.2, y: 50.0, w: 6.8, h: 4.0 },
+    { name: '探微按钮组', action: 'explore-direct', x: 32.1, y: 54.8, w: 6.8, h: 4.0 },
+    { name: '筑梦按钮组', action: 'forge-direct', x: 39.6, y: 55.1, w: 6.8, h: 4.0 },
   ],
   appreciation: [
     // 只保留顶部 NAV，原 PNG 中央卡片区将被 9 建筑网格完全覆盖
@@ -137,7 +137,7 @@ const SPOTS = {
   ],
   detail: [
     ...navOf('detail'),
-    { name: '返回鉴赏列表', page: 'appreciation', x: 2.5, y: 9.4, w: 10.8, h: 5.8 },
+    { name: '返回鉴赏列表', page: 'appreciation', x: 22.92, y: 8.57, w: 10.8, h: 5.8 },
   ],
   collection: [
     ...navOf('collection'),
@@ -173,6 +173,10 @@ function showTip(text = '该功能正在筹备中，敬请期待') {
 }
 
 function go(page) {
+  if (page !== 'appreciation' && current === 'appreciation') {
+    // 离开鉴赏页时把页码归零，下次进来从第 1 页开始
+    appreciationPage = 0;
+  }
   current = page;
   if (IMG[page]) {
     pageImage.src = IMG[page];
@@ -288,11 +292,27 @@ const MAP_SPOTS = [
   { id: 'pingyao-xianya',    x: 52.36, y: 53.65 }, // 山西 · 平遥
   { id: 'niuwangmiao-xitai', x: 52.70, y: 57.18 }, // 山西 · 临汾
   { id: 'rishengchang',      x: 52.51, y: 55.43 }, // 山西 · 平遥
+  // 第二批扩展（坐标为粗估，建议用 tools/map-pin-tagger.html 精修）
+  { id: 'tiantai-an',          x: 52.20, y: 53.10 }, // 山西 · 长治平顺
+  { id: 'pingyao-wenmiao',     x: 52.45, y: 53.95 }, // 山西 · 平遥（与县衙错开）
+  { id: 'jinci-shengmudian',   x: 50.95, y: 52.30 }, // 山西 · 太原晋源
+  { id: 'jinci-xiandian',      x: 51.15, y: 52.30 }, // 山西 · 太原晋源（与圣母殿同址略偏）
+  { id: 'xingguosi-boruodian', x: 43.20, y: 56.70 }, // 甘肃 · 天水秦安
+  { id: 'xingguosi-xiegong',   x: 43.50, y: 56.90 }, // 甘肃 · 天水秦安（与般若殿同址略偏）
 ];
+
+// 4C 大赛合规要求：凡涉及国界/行政区划的地图，出现处必须注明审图号与来源
+// （《公开地图内容表示规范》，底图应取自自然资源部标准地图服务 bzdt.ch.mnr.gov.cn）
+const MAP_CREDIT_TEXT = '本图基于自然资源部标准地图服务系统标准地图（审图号：GS(2019)1822号）绘制，底图边界无修改';
 
 function renderMapSpots() {
   document.querySelectorAll('.map-spot').forEach((el) => el.remove());
+  document.querySelectorAll('.map-credit').forEach((el) => el.remove());
   if (current !== 'map') return;
+  const credit = document.createElement('div');
+  credit.className = 'map-credit';
+  credit.textContent = MAP_CREDIT_TEXT;
+  stage.appendChild(credit);
   for (const spot of MAP_SPOTS) {
     const b = getBuildingById(spot.id);
     if (!b) continue;
@@ -387,36 +407,80 @@ function onSearchInput(e) {
   _searchEl.classList.add('open');
 }
 
-// 鉴赏页：动态生成 9 建筑卡片网格，覆盖原 PNG 中央
+// 鉴赏页：3x3 卡片网格 + 翻页，每页 9 个
+const APPRECIATION_PAGE_SIZE = 9;
+let appreciationPage = 0;
+
 function renderAppreciationGrid() {
   document.querySelectorAll('.appreciation-grid').forEach((el) => el.remove());
   if (current !== 'appreciation') return;
+
+  const totalPages = Math.max(1, Math.ceil(BUILDINGS.length / APPRECIATION_PAGE_SIZE));
+  if (appreciationPage >= totalPages) appreciationPage = 0;
+  const start = appreciationPage * APPRECIATION_PAGE_SIZE;
+  const pageItems = BUILDINGS.slice(start, start + APPRECIATION_PAGE_SIZE);
+
   const grid = document.createElement('div');
   grid.className = 'appreciation-grid';
   grid.innerHTML = `
     <div class="grid-mask"></div>
     <div class="grid-header">
-      <h2>古 建 鉴 赏 · 九 景</h2>
-      <p>选取一栋斗拱建筑，进入它的木构世界</p>
+      <h2>古 建 鉴 赏</h2>
+      <p>共 ${BUILDINGS.length} 景 · 第 ${appreciationPage + 1} / ${totalPages} 页 · 选取一栋斗拱建筑，进入它的木构世界</p>
     </div>
     <div class="grid-cards">
-      ${BUILDINGS.map((b) => `
+      ${pageItems.map((b) => {
+        const fullImg = b.images && b.images.full;
+        const imgStyle = fullImg ? `background-image:url('${fullImg}')` : 'background-image:none';
+        const noImgClass = fullImg ? '' : ' no-img';
+        return `
         <button class="bcard" data-id="${b.id}" title="${b.name}">
-          <div class="bcard-img" style="background-image:url('${b.images.full}')"></div>
+          <div class="bcard-img${noImgClass}" style="${imgStyle}">
+            ${fullImg ? '' : `<div class="bcard-placeholder">${b.shortName.slice(0, 2)}</div>`}
+          </div>
           <div class="bcard-info">
             <div class="bcard-title">${b.shortName}</div>
             <div class="bcard-sub">${b.era.split('（')[0]} · ${b.location.split(' · ')[0]}</div>
             <div class="bcard-keyword">${b.keyword}</div>
           </div>
         </button>
-      `).join('')}
+      `;
+      }).join('')}
+    </div>
+    <div class="grid-footer">
+      <button class="page-btn" data-act="prev" ${appreciationPage === 0 ? 'disabled' : ''}>← 上一页</button>
+      <span class="page-dots">
+        ${Array.from({ length: totalPages }, (_, i) =>
+          `<span class="page-dot${i === appreciationPage ? ' active' : ''}" data-page="${i}"></span>`
+        ).join('')}
+      </span>
+      <button class="page-btn" data-act="next" ${appreciationPage >= totalPages - 1 ? 'disabled' : ''}>下一页 →</button>
     </div>
   `;
   stage.appendChild(grid);
+
   grid.querySelectorAll('.bcard').forEach((card) => {
     card.addEventListener('click', () => {
       const id = card.getAttribute('data-id');
       openAppreciation(getBuildingById(id));
+    });
+  });
+
+  grid.querySelectorAll('.page-btn').forEach((btn) => {
+    btn.addEventListener('click', () => {
+      const act = btn.getAttribute('data-act');
+      if (act === 'prev' && appreciationPage > 0) appreciationPage--;
+      else if (act === 'next' && appreciationPage < totalPages - 1) appreciationPage++;
+      renderAppreciationGrid();
+    });
+  });
+  grid.querySelectorAll('.page-dot').forEach((dot) => {
+    dot.addEventListener('click', () => {
+      const p = parseInt(dot.getAttribute('data-page'), 10);
+      if (!Number.isNaN(p) && p !== appreciationPage) {
+        appreciationPage = p;
+        renderAppreciationGrid();
+      }
     });
   });
 }

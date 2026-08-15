@@ -1,0 +1,101 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>古建鉴赏 · 拾光筑梦</title>
+  <link rel="icon" href="/images/brand/logo-dougong.svg" type="image/svg+xml" />
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Ma+Shan+Zheng&family=Noto+Serif+SC:wght@400;600;900&display=swap" rel="stylesheet" />
+  <link rel="stylesheet" href="/src/view2/view2.css" />
+</head>
+<body>
+
+  <!-- 顶部导航（与新门户同款） -->
+  <header class="nav">
+    <a class="nav-logo" href="/home2.html">
+      <img class="nav-mark" src="/images/brand/logo-dougong.svg" alt="拾光筑梦" />
+      <span class="nav-word">
+        <b>拾光筑梦</b>
+        <em>TIMELESS ARCHES</em>
+      </span>
+    </a>
+    <nav class="nav-links">
+      <a href="/home2.html">首页</a>
+      <a href="/catalog2.html">万象图鉴</a>
+      <a href="/map2.html">古建舆图</a>
+      <a class="on" href="/view2.html">鉴赏</a>
+      <a href="/forge.html">筑梦</a>
+      <a href="/arcade.html">游艺坊</a>
+      <a href="/collection2.html">藏宝阁</a>
+    </nav>
+  </header>
+
+  <!-- 建筑选择胶片条 -->
+  <section class="strip-zone">
+    <div class="strip-head">
+      <h1>古建鉴赏</h1>
+      <p>观其形制 · 三维模型自由旋转，佐以实景图文</p>
+    </div>
+    <div class="strip" id="strip"></div>
+  </section>
+
+  <!-- 主体：3D 舞台 + 图文详解 -->
+  <main class="stage">
+
+    <!-- 左：三维模型 -->
+    <section class="viewer">
+      <div class="viewer-card">
+        <canvas id="gl"></canvas>
+        <div class="viewer-loading" id="viewer-loading">模型加载中…</div>
+        <div class="viewer-name" id="v-watermark">鉴</div>
+        <div class="viewer-hud">
+          <span class="hud-hint">拖拽旋转 · 滚轮缩放 · 右键平移</span>
+          <button class="hud-btn" id="btn-reset">复位视角</button>
+        </div>
+      </div>
+    </section>
+
+    <!-- 右：图文详解 -->
+    <aside class="info">
+      <div class="i-kicker"><span id="i-category">——</span><i>·</i><span id="i-keyword">——</span></div>
+      <h2 id="i-name">——</h2>
+      <div class="i-meta"><span id="i-era"></span><i>·</i><span id="i-location"></span></div>
+
+      <section class="i-sec">
+        <h3><i></i>建筑背景</h3>
+        <p id="i-background"></p>
+      </section>
+
+      <section class="i-sec">
+        <h3><i></i>斗拱特点</h3>
+        <p id="i-feature"></p>
+      </section>
+
+      <section class="i-sec">
+        <h3><i></i>实景与结构图</h3>
+        <div class="figs" id="figs"></div>
+      </section>
+
+      <div class="i-actions" id="i-actions"></div>
+    </aside>
+  </main>
+
+  <footer class="footer">
+    拾光筑梦 · 古建鉴赏 — Demo 预览版
+    <em>三维模型为项目团队完成的数字化成果 · 图文资料据公开文献整理</em>
+  </footer>
+
+  <!-- 大图灯箱 -->
+  <div class="lightbox" id="lightbox" hidden>
+    <img id="lb-img" src="" alt="" />
+    <div class="lb-caption" id="lb-caption"></div>
+    <button class="lb-close" id="lb-close">✕</button>
+  </div>
+
+  <div class="toast" id="toast"></div>
+
+  <script type="module" src="/src/view2/view2-main.js"></script>
+</body>
+</html>

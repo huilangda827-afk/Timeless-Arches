@@ -4,6 +4,10 @@
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>拾光筑梦 - Timeless Arches</title>
+    <link rel="icon" href="/images/brand/logo-dougong.svg" type="image/svg+xml" />
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link href="https://fonts.googleapis.com/css2?family=Ma+Shan+Zheng&family=Noto+Serif+SC:wght@400;600;900&display=swap" rel="stylesheet" />
     <link rel="stylesheet" href="src/style.css" />
   </head>
   <body>
@@ -13,9 +17,38 @@
     <div id="ui-layer">
       <!-- 主菜单页面（4C 改造：仅保留"开始筑梦"，藏阁/登录/设置走门户首页） -->
       <div class="page-menu" id="page-menu">
-        <h1 class="main-title">拾光筑梦</h1>
-        <p class="main-subtitle">指尖重现千年斗拱</p>
-        
+        <div class="menu-kicker">手 势 拼 装 · 指 尖 匠 心</div>
+        <h1 class="main-title">筑 梦</h1>
+        <p class="main-subtitle">拇指与食指捏合，抓起千年斗拱</p>
+
+        <!-- 关卡选择（默认选中 URL ?level= 指定关卡） -->
+        <div class="level-cards" id="level-cards">
+          <button class="level-card" data-level-idx="0">
+            <span class="lc-no">壹</span>
+            <span class="lc-body">
+              <b>单翘单昂平身科</b>
+              <em>5 个构件 · 入门 · 清官式斗拱</em>
+            </span>
+            <span class="lc-check">✓</span>
+          </button>
+          <button class="level-card" data-level-idx="1">
+            <span class="lc-no">贰</span>
+            <span class="lc-body">
+              <b>万春亭铺作</b>
+              <em>6 组集合 · 进阶 · 紫禁城御花园</em>
+            </span>
+            <span class="lc-check">✓</span>
+          </button>
+          <button class="level-card" data-level-idx="2">
+            <span class="lc-no">叁</span>
+            <span class="lc-body">
+              <b>圣母殿铺作</b>
+              <em>10 组构件 · 高阶 · 太原晋祠 · 北宋</em>
+            </span>
+            <span class="lc-check">✓</span>
+          </button>
+        </div>
+
         <div class="menu-buttons">
           <button class="btn btn-primary" id="btn-start">
             <span>开始筑梦</span>
@@ -24,7 +57,7 @@
              style="display:inline-flex;align-items:center;justify-content:center;text-decoration:none;margin-top:10px;">
             <span>精微匠造（键鼠精调）</span>
           </a>
-          <a class="btn btn-outline" href="./index.html"
+          <a class="btn btn-outline" href="./home2.html"
              style="display:inline-flex;align-items:center;justify-content:center;text-decoration:none;margin-top:10px;opacity:0.85;">
             <span>← 返回门户首页</span>
           </a>
@@ -76,6 +109,12 @@
               <span class="guide-number">3</span>
               <span class="guide-text"><b>松开</b>手指，自动判定拼接</span>
             </div>
+          </div>
+          <!-- 识别信号：质量灯 + 强光模式提示（由 main.js 每 0.5s 刷新） -->
+          <div class="guide-signal" id="guide-signal">
+            <span class="gs-label">识别信号</span>
+            <span class="gs-bars"><i></i><i></i><i></i></span>
+            <span class="gs-tip" id="gs-tip"></span>
           </div>
         </div>
 

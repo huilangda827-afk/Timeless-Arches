@@ -1,19 +1,19 @@
 /* ===================== CSS 变量系统 ===================== */
 :root {
-  /* 主色调 - 朱红色（#E60012 风格） */
-  --color-primary: #E60012;
-  --color-primary-hover: #CC0010;
-  --color-primary-active: #B3000E;
+  /* 主色调 - 朱砂红（与 home2 新设计语言统一） */
+  --color-primary: #c8392b;
+  --color-primary-hover: #dc4534;
+  --color-primary-active: #97281d;
 
-  /* 文字颜色 */
-  --color-text-primary: #FFFFFF;
-  --color-text-secondary: #E0E0E0;
-  --color-text-tertiary: #CCCCCC;
+  /* 文字颜色（象牙色系） */
+  --color-text-primary: #f3ead9;
+  --color-text-secondary: rgba(243, 234, 217, 0.78);
+  --color-text-tertiary: rgba(243, 234, 217, 0.6);
 
-  /* 边框颜色 - 鎏金色 */
-  --color-border-gold: #FFD700;
-  --color-border-gold-light: rgba(255, 215, 0, 0.6);
-  --color-border-gold-hover: rgba(255, 215, 0, 0.9);
+  /* 边框颜色 - 鎏金色（压暗，去荧光感） */
+  --color-border-gold: #c9a24b;
+  --color-border-gold-light: rgba(201, 162, 75, 0.6);
+  --color-border-gold-hover: rgba(201, 162, 75, 0.9);
 
   /* 背景颜色 */
   --color-bg-overlay: rgba(0, 0, 0, 0.3);
@@ -39,7 +39,7 @@
   --shadow-sm: 0 2px 4px rgba(0, 0, 0, 0.1);
   --shadow-md: 0 4px 8px rgba(0, 0, 0, 0.2);
   --shadow-lg: 0 8px 16px rgba(0, 0, 0, 0.3);
-  --shadow-glow: 0 0 20px rgba(196, 30, 58, 0.5);
+  --shadow-glow: 0 0 20px rgba(200, 57, 43, 0.5);
 }
 
 /* ===================== 全局重置 ===================== */
@@ -70,9 +70,13 @@ body {
   width: 100%;
   height: 100%;
   z-index: 1000;
-  /* 主菜单背景图（只在主菜单显示时可见） */
-  background: url('/background-menu.jpg') center center / cover no-repeat;
-  background-color: #000; /* 备用纯色背景 */
+  /* 主菜单背景图（只在主菜单显示时可见）：
+     暖色斗拱檐角实拍 + 深夜色渐晕，与 home2 新设计语言一致 */
+  background:
+    radial-gradient(ellipse 90% 70% at 50% 30%, rgba(23, 17, 11, 0.25), rgba(13, 10, 6, 0.82)),
+    linear-gradient(to bottom, rgba(13, 10, 6, 0.35), rgba(13, 10, 6, 0.72)),
+    url('/images/home2/8.jpg') center 35% / cover no-repeat;
+  background-color: #17110b; /* 备用纯色背景 */
   /* ✅ 修复：默认允许事件，但子元素会覆盖 */
   pointer-events: none;
 }
@@ -135,29 +139,152 @@ body {
   display: none;
 }
 
-/* 主标题 */
+/* 眉题（新设计语言：细金字距排开） */
+.menu-kicker {
+  font-family: 'Noto Serif SC', var(--font-title);
+  font-size: 12.5px;
+  letter-spacing: 0.5em;
+  text-indent: 0.5em;
+  color: rgba(201, 162, 75, 0.85);
+  margin-bottom: 14px;
+}
+
+/* 主标题（书法体，与 home2 同款） */
 .main-title {
-  font-family: var(--font-title);
-  font-size: clamp(3rem, 8vw, 5rem);
-  font-weight: 700;
-  color: var(--color-text-primary);
+  font-family: 'Ma Shan Zheng', 'STKaiti', 'KaiTi', var(--font-title);
+  font-size: clamp(4rem, 9vw, 6.5rem);
+  font-weight: 400;
+  color: #f3ead9;
   margin-bottom: var(--spacing-sm);
-  text-shadow: 
-    2px 2px 4px rgba(0, 0, 0, 0.5),
-    0 0 20px rgba(212, 175, 55, 0.3);
-  letter-spacing: 0.1em;
-  line-height: 1.2;
+  text-shadow:
+    0 2px 10px rgba(0, 0, 0, 0.6),
+    0 0 40px rgba(201, 162, 75, 0.3);
+  letter-spacing: 0.16em;
+  line-height: 1.15;
 }
 
 /* 副标题 */
 .main-subtitle {
-  font-family: var(--font-body);
-  font-size: clamp(1rem, 2.5vw, 1.5rem);
-  font-weight: 300;
-  color: var(--color-text-secondary);
-  margin-bottom: var(--spacing-xl);
+  font-family: 'Noto Serif SC', var(--font-title);
+  font-size: clamp(0.9rem, 2vw, 1.1rem);
+  font-weight: 400;
+  color: rgba(243, 234, 217, 0.68);
+  margin-bottom: var(--spacing-lg);
   text-shadow: 1px 1px 2px rgba(0, 0, 0, 0.5);
-  letter-spacing: 0.05em;
+  letter-spacing: 0.3em;
+}
+
+/* ===================== 关卡选择卡 ===================== */
+.level-cards {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  width: 100%;
+  max-width: 380px;
+  margin: 0 auto var(--spacing-md);
+}
+
+.level-card {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  padding: 12px 18px;
+  border: 1px solid rgba(243, 234, 217, 0.2);
+  border-radius: 6px;
+  background: rgba(19, 14, 8, 0.66);
+  backdrop-filter: blur(6px);
+  color: #f3ead9;
+  font-family: 'Noto Serif SC', var(--font-title);
+  cursor: pointer;
+  text-align: left;
+  transition: all 0.25s;
+}
+
+.level-card:hover {
+  border-color: rgba(201, 162, 75, 0.7);
+  background: rgba(201, 162, 75, 0.1);
+}
+
+.level-card.on {
+  border-color: #c8392b;
+  background: rgba(200, 57, 43, 0.18);
+  box-shadow: 0 6px 22px rgba(200, 57, 43, 0.28);
+}
+
+.lc-no {
+  width: 38px;
+  height: 38px;
+  flex: 0 0 auto;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border: 1px solid rgba(201, 162, 75, 0.55);
+  border-radius: 50%;
+  font-family: 'Ma Shan Zheng', 'STKaiti', serif;
+  font-size: 19px;
+  color: #c9a24b;
+}
+
+.level-card.on .lc-no {
+  background: #c8392b;
+  border-color: #c8392b;
+  color: #fff;
+}
+
+.lc-body { display: flex; flex-direction: column; gap: 4px; line-height: 1; flex: 1; }
+.lc-body b { font-size: 15.5px; letter-spacing: 0.1em; font-weight: 600; }
+.lc-body em { font-style: normal; font-size: 11.5px; letter-spacing: 0.08em; color: rgba(243, 234, 217, 0.55); }
+
+.lc-check {
+  font-size: 15px;
+  color: #c8392b;
+  opacity: 0;
+  transition: opacity 0.2s;
+}
+
+.level-card.on .lc-check { opacity: 1; }
+
+/* ===================== 识别信号指示（手势指引卡内） ===================== */
+.guide-signal {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-top: 10px;
+  padding-top: 10px;
+  border-top: 1px dashed rgba(255, 215, 0, 0.2);
+}
+
+.gs-label {
+  font-size: 11px;
+  letter-spacing: 0.14em;
+  color: rgba(243, 234, 217, 0.55);
+}
+
+.gs-bars { display: flex; gap: 3px; align-items: flex-end; }
+
+.gs-bars i {
+  width: 5px;
+  border-radius: 1px;
+  background: rgba(243, 234, 217, 0.18);
+  transition: background 0.3s;
+}
+
+.gs-bars i:nth-child(1) { height: 6px; }
+.gs-bars i:nth-child(2) { height: 9px; }
+.gs-bars i:nth-child(3) { height: 12px; }
+
+.guide-signal[data-level="1"] .gs-bars i:nth-child(-n+1),
+.guide-signal[data-level="2"] .gs-bars i:nth-child(-n+2),
+.guide-signal[data-level="3"] .gs-bars i:nth-child(-n+3) {
+  background: #7ec97e;
+}
+
+.guide-signal[data-level="1"] .gs-bars i:nth-child(-n+1) { background: #d9843b; }
+
+.gs-tip {
+  font-size: 10.5px;
+  letter-spacing: 0.06em;
+  color: #d9a13b;
 }
 
 /* 按钮容器 */

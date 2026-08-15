@@ -1,0 +1,85 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>稳如山 · 地震台试炼 · 拾光筑梦</title>
+  <link rel="icon" href="/images/brand/logo-dougong.svg" type="image/svg+xml" />
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Ma+Shan+Zheng&family=Noto+Serif+SC:wght@400;600;900&family=JetBrains+Mono:wght@400;600&display=swap" rel="stylesheet" />
+  <link rel="stylesheet" href="/src/quake/quake.css" />
+</head>
+<body>
+
+  <!-- 顶栏 -->
+  <header class="bar">
+    <div class="bar-left">
+      <span class="bar-title">稳如山</span>
+      <span class="bar-sub">地震台试炼 · 以柔克刚</span>
+    </div>
+    <div class="bar-right">
+      <a class="bar-btn" href="/arcade.html">← 返回游艺坊</a>
+    </div>
+  </header>
+
+  <!-- 3D 舞台 -->
+  <canvas id="gl"></canvas>
+  <div class="loading" id="loading">斗拱构件载入中…（首次约 90MB，请稍候）</div>
+
+  <!-- 对照组状态牌 -->
+  <div class="duel">
+    <div class="duel-card" id="card-dougong">
+      <b>榫卯斗拱</b>
+      <em id="status-dougong">静候试炼</em>
+    </div>
+    <div class="duel-vs">对照</div>
+    <div class="duel-card" id="card-brick">
+      <b>刚性砖墙</b>
+      <em id="status-brick">静候试炼</em>
+    </div>
+  </div>
+
+  <!-- 控制台 -->
+  <div class="console">
+    <div class="c-row">
+      <span class="c-label">结构</span>
+      <div class="c-tabs" id="structure-tabs"></div>
+    </div>
+    <div class="c-row">
+      <span class="c-label">震级</span>
+      <input type="range" id="mag" min="4" max="8" step="0.5" value="6" />
+      <span class="c-val mono" id="mag-val">M 6.0</span>
+    </div>
+    <div class="c-row c-btns">
+      <button class="c-btn primary" id="btn-shake">开始地震</button>
+      <button class="c-btn outline" id="btn-reset">重 置</button>
+    </div>
+    <div class="c-timer mono" id="timer" hidden>00.0 s</div>
+  </div>
+
+  <!-- 原理注解 -->
+  <div class="note" id="note">
+    <b>为什么斗拱抗震？</b>
+    斗、拱、昂之间以榫卯咬合而非刚性连接——地震来袭时构件之间可以微微滑移、摩擦耗能，
+    把破坏性的冲击化解为无数次微小的"松动与复位"。这就是中国木构建筑"墙倒屋不塌"的千年智慧。
+  </div>
+
+  <!-- 结果卡 -->
+  <div class="result" id="result" hidden>
+    <div class="result-card">
+      <div class="rc-kicker" id="rc-kicker">◆◆◆ 试 炼 结 束 ◆◆◆</div>
+      <h2 id="rc-title">稳如山！</h2>
+      <p id="rc-body"></p>
+      <div class="rc-actions">
+        <button class="rc-btn outline" id="rc-again">再来一震</button>
+        <button class="rc-btn primary" id="rc-stronger">加大震级 →</button>
+      </div>
+    </div>
+  </div>
+
+  <div class="toast" id="toast"></div>
+
+  <script type="module" src="/src/quake/quake-main.js"></script>
+</body>
+</html>

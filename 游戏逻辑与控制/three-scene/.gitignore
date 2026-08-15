@@ -22,3 +22,22 @@ dist-ssr
 *.njsproj
 *.sln
 *.sw?
+
+# Vercel CLI 部署后生成（含 deployment ID / token，禁止提交）
+.vercel
+.vercel-old-arches/
+
+# 本地存档（不参与 build / deploy / git）
+_archive/
+
+# 备份文件
+*.bak
+.preview.log
+
+.vercel
+
+# 工具站独立打包输出（由 build-*-deploy.cjs 生成，给 Netlify Drop 用）
+calibrator-deploy/
+mapper-deploy/
+
+.vercel

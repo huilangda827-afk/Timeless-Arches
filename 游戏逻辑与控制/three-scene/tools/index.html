@@ -1,0 +1,338 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>开发者工具集 · DEV TOOLS · 斗拱·时空之拱</title>
+  <style>
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    html, body {
+      min-height: 100vh;
+      font-family: -apple-system, "Segoe UI", "Microsoft YaHei", "PingFang SC", sans-serif;
+      background:
+        radial-gradient(ellipse at 20% 10%, rgba(255, 210, 74, 0.06) 0%, transparent 50%),
+        radial-gradient(ellipse at 80% 90%, rgba(185, 28, 28, 0.08) 0%, transparent 50%),
+        #1a1410;
+      color: #e8dcc8;
+      line-height: 1.6;
+    }
+    body { padding: 48px 24px 64px; }
+
+    .container { max-width: 1100px; margin: 0 auto; }
+
+    /* ===== Header ===== */
+    .hero {
+      text-align: center;
+      margin-bottom: 48px;
+      padding: 32px 24px 28px;
+      border: 1px solid rgba(255, 215, 0, 0.18);
+      border-radius: 12px;
+      background: linear-gradient(180deg, rgba(40, 30, 22, 0.6) 0%, rgba(28, 22, 18, 0.3) 100%);
+      backdrop-filter: blur(8px);
+    }
+    .hero .badge {
+      display: inline-block;
+      padding: 4px 14px;
+      font-size: 11px;
+      letter-spacing: 3px;
+      color: #ffd24a;
+      border: 1px solid rgba(255, 215, 0, 0.45);
+      border-radius: 100px;
+      margin-bottom: 14px;
+      text-transform: uppercase;
+    }
+    .hero h1 {
+      font-size: 32px;
+      letter-spacing: 4px;
+      color: #ffd24a;
+      margin-bottom: 10px;
+      font-weight: 600;
+    }
+    .hero .subtitle {
+      font-size: 14px;
+      color: #a89070;
+      letter-spacing: 1px;
+    }
+    .hero .warn {
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+      margin-top: 18px;
+      padding: 6px 14px;
+      font-size: 12px;
+      color: #f0a868;
+      background: rgba(240, 168, 104, 0.08);
+      border: 1px solid rgba(240, 168, 104, 0.3);
+      border-radius: 4px;
+      letter-spacing: 0.5px;
+    }
+
+    /* ===== Tool grid ===== */
+    .grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(320px, 1fr));
+      gap: 22px;
+    }
+    .card {
+      position: relative;
+      display: flex;
+      flex-direction: column;
+      padding: 24px 22px 22px;
+      background: linear-gradient(180deg, rgba(44, 33, 28, 0.85) 0%, rgba(28, 22, 18, 0.85) 100%);
+      border: 1px solid rgba(255, 215, 0, 0.2);
+      border-radius: 10px;
+      text-decoration: none;
+      color: inherit;
+      cursor: pointer;
+      transition: all 0.25s cubic-bezier(0.4, 0, 0.2, 1);
+      overflow: hidden;
+    }
+    .card::before {
+      content: '';
+      position: absolute; top: 0; left: 0; right: 0; height: 2px;
+      background: linear-gradient(90deg, transparent 0%, #ffd24a 50%, transparent 100%);
+      opacity: 0;
+      transition: opacity 0.25s;
+    }
+    .card:hover {
+      transform: translateY(-4px);
+      border-color: rgba(255, 215, 0, 0.55);
+      box-shadow: 0 12px 28px rgba(0, 0, 0, 0.45), 0 0 0 1px rgba(255, 215, 0, 0.1);
+    }
+    .card:hover::before { opacity: 1; }
+
+    .card-head {
+      display: flex; align-items: center; gap: 14px;
+      margin-bottom: 14px;
+    }
+    .card-icon {
+      width: 44px; height: 44px; flex-shrink: 0;
+      display: flex; align-items: center; justify-content: center;
+      font-size: 22px;
+      background: rgba(255, 215, 0, 0.1);
+      border: 1px solid rgba(255, 215, 0, 0.3);
+      border-radius: 8px;
+    }
+    .card-title {
+      font-size: 17px;
+      color: #ffd24a;
+      letter-spacing: 1.5px;
+      margin-bottom: 2px;
+    }
+    .card-tag {
+      font-size: 10px;
+      color: #8a7050;
+      letter-spacing: 2px;
+      text-transform: uppercase;
+    }
+
+    .card-desc {
+      font-size: 13px;
+      color: #c8b89c;
+      line-height: 1.7;
+      margin-bottom: 14px;
+      flex-grow: 1;
+    }
+
+    .card-meta {
+      display: flex; flex-wrap: wrap; gap: 6px;
+      margin-bottom: 16px;
+    }
+    .meta-pill {
+      padding: 3px 10px;
+      font-size: 10px;
+      letter-spacing: 1px;
+      color: #a89070;
+      background: rgba(168, 144, 112, 0.1);
+      border: 1px solid rgba(168, 144, 112, 0.25);
+      border-radius: 100px;
+    }
+
+    .card-action {
+      display: flex; align-items: center; justify-content: space-between;
+      padding-top: 14px;
+      border-top: 1px solid rgba(255, 215, 0, 0.1);
+    }
+    .open-btn {
+      display: inline-flex; align-items: center; gap: 6px;
+      font-size: 12px;
+      letter-spacing: 1.5px;
+      color: #ffd24a;
+      transition: gap 0.2s;
+    }
+    .card:hover .open-btn { gap: 10px; }
+    .path-hint {
+      font-size: 10px;
+      color: #6b5840;
+      font-family: 'SF Mono', Consolas, monospace;
+    }
+
+    /* ===== Footer ===== */
+    .footer {
+      margin-top: 56px;
+      padding-top: 28px;
+      border-top: 1px solid rgba(255, 215, 0, 0.12);
+      text-align: center;
+    }
+    .footer .links {
+      display: flex; justify-content: center; gap: 18px;
+      margin-bottom: 14px;
+      flex-wrap: wrap;
+    }
+    .footer a {
+      font-size: 12px;
+      color: #a89070;
+      text-decoration: none;
+      letter-spacing: 1px;
+      padding: 6px 14px;
+      border: 1px solid rgba(168, 144, 112, 0.3);
+      border-radius: 4px;
+      transition: all 0.2s;
+    }
+    .footer a:hover {
+      color: #ffd24a;
+      border-color: rgba(255, 215, 0, 0.5);
+      background: rgba(255, 215, 0, 0.05);
+    }
+    .footer .copyright {
+      font-size: 11px;
+      color: #6b5840;
+      letter-spacing: 1px;
+    }
+
+    /* ===== Section labels ===== */
+    .section-label {
+      display: flex; align-items: center; gap: 12px;
+      margin: 36px 0 18px;
+      font-size: 12px;
+      letter-spacing: 3px;
+      color: #c8a063;
+      text-transform: uppercase;
+    }
+    .section-label::after {
+      content: ''; flex: 1;
+      height: 1px;
+      background: linear-gradient(90deg, rgba(200, 160, 99, 0.3) 0%, transparent 100%);
+    }
+  </style>
+</head>
+<body>
+  <div class="container">
+
+    <header class="hero">
+      <span class="badge">DEV TOOLS · 内部</span>
+      <h1>开发者工具集</h1>
+      <p class="subtitle">斗拱 · 时空之拱 — 内容编辑与位姿校准工具链</p>
+      <div class="warn">⚠ 仅供项目维护者使用，不对外开放</div>
+    </header>
+
+    <div class="section-label">3D 内容编辑 · 3D Editing</div>
+
+    <div class="grid">
+      <a class="card" href="/tools/calibrator.html">
+        <div class="card-head">
+          <div class="card-icon">🧱</div>
+          <div>
+            <div class="card-title">斗拱关卡校准器</div>
+            <div class="card-tag">CALIBRATOR</div>
+          </div>
+        </div>
+        <p class="card-desc">
+          可视化校准每个构件的目标位姿（target）与初始位姿（dock）。支持 GLB 加载、平移/旋转/缩放、一键吸附、JSON 导出。新关卡接入的核心工具。
+        </p>
+        <div class="card-meta">
+          <span class="meta-pill">GLB</span>
+          <span class="meta-pill">TRANSFORM</span>
+          <span class="meta-pill">JSON 导出</span>
+        </div>
+        <div class="card-action">
+          <span class="open-btn">打开工具 →</span>
+          <span class="path-hint">/tools/calibrator.html</span>
+        </div>
+      </a>
+    </div>
+
+    <div class="section-label">2D 布局编辑 · 2D Layout</div>
+
+    <div class="grid">
+      <a class="card" href="/tools/map-pin-tagger.html">
+        <div class="card-head">
+          <div class="card-icon">📍</div>
+          <div>
+            <div class="card-title">古建舆图标注器</div>
+            <div class="card-tag">MAP PIN TAGGER</div>
+          </div>
+        </div>
+        <p class="card-desc">
+          在古建舆图底图上拖拽放置/调整建筑点位。支持鼠标滚轮缩放、平移、键盘微调，导出 <code style="color:#ffd24a;font-family:monospace;font-size:11px;">MAP_SPOTS</code> JSON 替换 portal-main.js。
+        </p>
+        <div class="card-meta">
+          <span class="meta-pill">缩放/平移</span>
+          <span class="meta-pill">百分比坐标</span>
+          <span class="meta-pill">JSON 导出</span>
+        </div>
+        <div class="card-action">
+          <span class="open-btn">打开工具 →</span>
+          <span class="path-hint">/tools/map-pin-tagger.html</span>
+        </div>
+      </a>
+
+      <a class="card" href="/tools/hotspot-tagger.html">
+        <div class="card-head">
+          <div class="card-icon">🎯</div>
+          <div>
+            <div class="card-title">热区可视化编辑器</div>
+            <div class="card-tag">HOTSPOT TAGGER</div>
+          </div>
+        </div>
+        <p class="card-desc">
+          在 6 个门户页 mockup 上可视化拖拽/调整每个按钮、卡片、NAV 的点击热区。支持单页独立布局（NAV_LAYOUTS），导出 <code style="color:#ffd24a;font-family:monospace;font-size:11px;">SPOTS / NAV_LAYOUTS</code> JSON。
+        </p>
+        <div class="card-meta">
+          <span class="meta-pill">6 页切换</span>
+          <span class="meta-pill">拖拽/缩放/手柄</span>
+          <span class="meta-pill">JSON 导出</span>
+        </div>
+        <div class="card-action">
+          <span class="open-btn">打开工具 →</span>
+          <span class="path-hint">/tools/hotspot-tagger.html</span>
+        </div>
+      </a>
+    </div>
+
+    <footer class="footer">
+      <div class="links">
+        <a href="/index.html">← 返回门户首页</a>
+        <a href="/forge.html">筑梦（手势）</a>
+        <a href="/precision.html">精微匠造（键鼠）</a>
+      </div>
+      <div class="copyright">
+        斗拱 · 时空之拱 · Timeless Arches v2.1.4 — Dev Tools
+      </div>
+    </footer>
+
+  </div>
+
+  <script>
+    // 简易统计：上次访问时间，便于判断哪个工具最近用得多（仅本地）
+    try {
+      const cards = document.querySelectorAll('.card');
+      cards.forEach(card => {
+        const path = card.getAttribute('href');
+        card.addEventListener('click', () => {
+          localStorage.setItem('devtool:last:' + path, Date.now().toString());
+        });
+        const last = localStorage.getItem('devtool:last:' + path);
+        if (last) {
+          const days = Math.floor((Date.now() - parseInt(last, 10)) / (1000 * 60 * 60 * 24));
+          const hint = card.querySelector('.path-hint');
+          if (hint && days >= 0) {
+            const txt = days === 0 ? '今天用过' : days === 1 ? '昨天用过' : days + ' 天前用过';
+            hint.textContent = txt + ' · ' + hint.textContent;
+          }
+        }
+      });
+    } catch (e) { /* localStorage 不可用时静默忽略 */ }
+  </script>
+</body>
+</html>
